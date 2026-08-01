@@ -16,8 +16,10 @@ type BroadcastStat struct {
 }
 
 type TrafficVolume struct {
-	Packets uint64 `json:"packets"`
-	Bytes   uint64 `json:"bytes"`
+	Packets    uint64  `json:"packets"`
+	Bytes      uint64  `json:"bytes"`
+	PacketRate float64 `json:"packet_rate"`
+	ByteRate   float64 `json:"byte_rate"`
 }
 
 // PeerTrafficSummary rappresenta l'aggregazione di tutto il traffico generato da uno specifico MAC

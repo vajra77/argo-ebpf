@@ -1,9 +1,9 @@
 package main
 
 import (
+	"argo-ebpf/internal/domain"
 	"context"
 	"errors"
-	"flag"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,18 +16,24 @@ import (
 	"argo-ebpf/internal/presentation"
 	"argo-ebpf/internal/service/alert"
 	"argo-ebpf/internal/service/collector"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	// command line flags
-	iface := flag.String("iface", "eth0", "Interfaccia di rete da monitorare (es. eth0, bond0)")
-	apiAddr := flag.String("api-addr", ":8080", "Indirizzo di ascolto per le API REST Retool")
-	logLevel := flag.String("log-level", "info", "Livello di log (debug, info, warn, error)")
-	flag.Parse()
+	if err := godotenv.Load(); err != nil {
+		slog.Warn("No .env file found, using system environment variables")
+	}
+
+	// Recupero configurazioni da Environment Variables
+	iface := getEnv("IFACE", "eth0")
+	apiAddr := getEnv("API_ADDR", "127.0.0.1:8080")
+	logLevel := getEnv("LOG_LEVEL", "info")
+	redisAddr := getEnv("REDIS_ADDR", "localhost:6379")
 
 	// Logger init
 	var level slog.Level
-	switch *logLevel {
+	switch logLevel {
 	case "debug":
 		level = slog.LevelDebug
 	case "warn":
@@ -42,8 +48,8 @@ func main() {
 	slog.SetDefault(logger)
 
 	logger.Info("👁️ Starting argo-ebpf Sentinel...",
-		"interface", *iface,
-		"api_address", *apiAddr,
+		"interface", iface,
+		"api_address", apiAddr,
 	)
 
 	// Context for graceful shutdown
@@ -51,13 +57,18 @@ func main() {
 	defer stop()
 
 	// In-Memory Repository init
-	memStore := repository.NewInMemoryStore()
+	var store domain.MetricsRepository
+	if redisAddr != "" {
+		store = repository.NewRedisStore(redisAddr, "", 0)
+	} else {
+		store = repository.NewInMemoryStore()
+	}
 
 	// Event Processor init
-	processor := collector.NewEventProcessor(memStore, logger)
+	processor := collector.NewEventProcessor(store, logger)
 
 	// eBPF/XDP loader initialization
-	bpfLoader, err := ebpf.NewLoader(*iface, processor, logger)
+	bpfLoader, err := ebpf.NewLoader(iface, processor, logger)
 	if err != nil {
 		logger.Error("Failed to initialize eBPF loader", "error", err)
 		os.Exit(1)
@@ -68,16 +79,16 @@ func main() {
 		logger.Error("Failed to start eBPF XDP hook", "error", err)
 		os.Exit(1)
 	}
-	logger.Info("eBPF XDP hook attached successfully", "interface", *iface)
+	logger.Info("eBPF XDP hook attached successfully", "interface", iface)
 
 	// Anomaly Detector Engine (Background Worker)
-	anomalyDetector := alert.NewAnomalyDetector(memStore, alert.DefaultConfig(), logger)
+	anomalyDetector := alert.NewAnomalyDetector(store, alert.DefaultConfig(), logger)
 	go anomalyDetector.Start(ctx)
 
 	// API router and server init
-	router := presentation.NewRouter(memStore)
+	router := presentation.NewRouter(store)
 	server := &http.Server{
-		Addr:         *apiAddr,
+		Addr:         apiAddr,
 		Handler:      router,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -85,7 +96,7 @@ func main() {
 	}
 
 	go func() {
-		logger.Info("REST API Server running", "address", *apiAddr)
+		logger.Info("REST API Server running", "address", apiAddr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("HTTP API Server failure", "error", err)
 			stop()
@@ -105,4 +116,11 @@ func main() {
 	}
 
 	logger.Info("argo-ebpf stopped cleanly. Goodbye!")
+}
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
 }

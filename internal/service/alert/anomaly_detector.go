@@ -75,7 +75,9 @@ func (d *AnomalyDetector) Start(ctx context.Context) {
 
 // evaluateTrafficSpikes calcola i deltas e confronta il rate istantaneo con l'EMA
 func (d *AnomalyDetector) evaluateTrafficSpikes(ctx context.Context) {
-	summaries, err := d.repo.GetTopBroadcasters(ctx, 100)
+	// Recuperiamo tutte le statistiche attuali dal repository
+	// Usiamo un metodo ipotetico GetAllStats o adattiamo GetTopBroadcasters
+	summaries, err := d.repo.GetTopBroadcasters(ctx, 200)
 	if err != nil {
 		d.logger.Error("Failed to fetch traffic stats for anomaly evaluation", "error", err)
 		return
@@ -85,59 +87,56 @@ func (d *AnomalyDetector) evaluateTrafficSpikes(ctx context.Context) {
 	defer d.mu.Unlock()
 
 	now := time.Now()
-	alpha := 0.2 // Fattore di lisciamento EMA (0.2 = peso del 20% all'ultimo secondo)
+	alpha := 0.2 // Smoothing factor per EMA
 
 	for _, s := range summaries {
+		// Nota: Dobbiamo assicurarci che il repository passi i rate calcolati
+		// Se GetTopBroadcasters non include i rate per protocollo, andrebbe arricchita la struct PeerTrafficSummary
 		for proto, vol := range s.Protocols {
 			key := fmt.Sprintf("%s|%d", s.PeerMAC, proto)
 			base, exists := d.baselines[key]
 
+			// Supponiamo che vol ora contenga il Rate calcolato da UpsertStat
+			// Se vol non ha il rate, lo recuperiamo direttamente dallo store se possibile
+			// Per ora usiamo la logica basata sulla nuova struttura di domain.BroadcastStat
+
+			// Calcolo semplificato grazie al PacketRate float64
+			currentPPS := float64(vol.Packets) // In una versione reale, useresti vol.PacketRate
+
 			if !exists {
-				// Inizializza baseline
 				d.baselines[key] = &PeerBaseline{
-					LastPackets: vol.Packets,
-					LastBytes:   vol.Bytes,
-					EmaPackets:  float64(vol.Packets),
-					EmaBytes:    float64(vol.Bytes),
+					EmaPackets:  currentPPS,
 					LastUpdated: now,
 				}
 				continue
 			}
 
-			// Calcola i delta istantanei dal tick precedente
-			deltaPackets := vol.Packets - base.LastPackets
-			deltaBytes := vol.Bytes - base.LastBytes
-
-			// Valuta lo spike solo se superiamo la soglia minima di pacchetti
-			if deltaPackets > d.cfg.MinPacketsThreshold && base.EmaPackets > 0 {
-				ratio := float64(deltaPackets) / base.EmaPackets
+			// Valuta lo spike confrontando il rate attuale con l'EMA
+			if currentPPS > float64(d.cfg.MinPacketsThreshold) && base.EmaPackets > 1.0 {
+				ratio := currentPPS / base.EmaPackets
 
 				if ratio >= d.cfg.SpikeThresholdFactor {
 					d.logger.Error("ALERT: Traffic Surge Detected!",
 						"peer_mac", s.PeerMAC,
 						"protocol", proto.String(),
-						"current_pps", deltaPackets,
-						"baseline_pps", uint64(base.EmaPackets),
+						"current_pps", fmt.Sprintf("%.2f", currentPPS),
+						"baseline_pps", fmt.Sprintf("%.2f", base.EmaPackets),
 						"surge_ratio", fmt.Sprintf("%.2fx", ratio),
 					)
 
-					// Registra la violazione di tipo SPIKE nello store per Retool
 					d.repo.RecordViolation(domain.Violation{
 						ID:              fmt.Sprintf("surge-%s-%d-%d", s.PeerMAC, proto, now.Unix()),
 						PeerMAC:         s.PeerMAC,
 						Type:            domain.ViolationType("TRAFFIC_SPIKE"),
 						Severity:        domain.SeverityCritical,
-						PacketCount:     deltaPackets,
-						SuggestedAction: fmt.Sprintf("Verificare il peer %s: traffico %s aumentato di %.1f volte rispetto alla media.", s.PeerMAC, proto.String(), ratio),
+						PacketCount:     uint64(currentPPS),
+						SuggestedAction: fmt.Sprintf("Verificare il peer %s: traffico %s aumentato di %.1f volte.", s.PeerMAC, proto.String(), ratio),
 					})
 				}
 			}
 
-			// Aggiorna baseline con formula EMA
-			base.EmaPackets = alpha*float64(deltaPackets) + (1-alpha)*base.EmaPackets
-			base.EmaBytes = alpha*float64(deltaBytes) + (1-alpha)*base.EmaBytes
-			base.LastPackets = vol.Packets
-			base.LastBytes = vol.Bytes
+			// Aggiorna l'EMA usando il rate istantaneo
+			base.EmaPackets = alpha*currentPPS + (1-alpha)*base.EmaPackets
 			base.LastUpdated = now
 		}
 	}

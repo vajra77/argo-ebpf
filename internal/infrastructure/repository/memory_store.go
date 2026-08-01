@@ -94,8 +94,10 @@ func (s *InMemoryStore) GetTopBroadcasters(ctx context.Context, limit int) ([]do
 		summary.TotalBytes += stat.Bytes
 
 		summary.Protocols[stat.Protocol] = domain.TrafficVolume{
-			Packets: stat.Packets,
-			Bytes:   stat.Bytes,
+			Packets:    stat.Packets,
+			Bytes:      stat.Bytes,
+			PacketRate: stat.PacketRate,
+			ByteRate:   stat.ByteRate,
 		}
 	}
 
