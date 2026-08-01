@@ -5,15 +5,15 @@ import (
 	"strconv"
 	"time"
 
-	"argo-ebpf/internal/domain"
-	"argo-ebpf/internal/presentation/dto"
+	"argo-ebpf/internal/api/dto"
+	"argo-ebpf/internal/models"
 )
 
 type BroadcasterHandler struct {
-	repo domain.MetricsRepository
+	repo models.MetricsRepository
 }
 
-func NewBroadcasterHandler(repo domain.MetricsRepository) *BroadcasterHandler {
+func NewBroadcasterHandler(repo models.MetricsRepository) *BroadcasterHandler {
 	return &BroadcasterHandler{repo: repo}
 }
 

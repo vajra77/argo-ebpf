@@ -1,4 +1,4 @@
-package domain
+package models
 
 import "time"
 
@@ -20,14 +20,4 @@ type TrafficVolume struct {
 	Bytes      uint64  `json:"bytes"`
 	PacketRate float64 `json:"packet_rate"`
 	ByteRate   float64 `json:"byte_rate"`
-}
-
-// PeerTrafficSummary rappresenta l'aggregazione di tutto il traffico generato da uno specifico MAC
-type PeerTrafficSummary struct {
-	PeerMAC      string                         `json:"peer_mac"`
-	PeerASN      int                            `json:"peer_asn,omitempty"`
-	PeerName     string                         `json:"peer_name,omitempty"`
-	TotalPackets uint64                         `json:"total_packets"`
-	TotalBytes   uint64                         `json:"total_bytes"`
-	Protocols    map[ProtocolType]TrafficVolume `json:"protocols"`
 }

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"argo-ebpf/internal/domain"
+	"argo-ebpf/internal/models"
 )
 
 // Configurazione delle soglie di Anomaly Detection
@@ -38,14 +38,14 @@ type PeerBaseline struct {
 }
 
 type AnomalyDetector struct {
-	repo      domain.MetricsRepository
+	repo      models.MetricsRepository
 	logger    *slog.Logger
 	cfg       DetectorConfig
 	mu        sync.Mutex
 	baselines map[string]*PeerBaseline // "MAC|Proto" -> Baseline
 }
 
-func NewAnomalyDetector(repo domain.MetricsRepository, cfg DetectorConfig, logger *slog.Logger) *AnomalyDetector {
+func NewAnomalyDetector(repo models.MetricsRepository, cfg DetectorConfig, logger *slog.Logger) *AnomalyDetector {
 	return &AnomalyDetector{
 		repo:      repo,
 		cfg:       cfg,
@@ -98,7 +98,7 @@ func (d *AnomalyDetector) evaluateTrafficSpikes(ctx context.Context) {
 
 			// Supponiamo che vol ora contenga il Rate calcolato da UpsertStat
 			// Se vol non ha il rate, lo recuperiamo direttamente dallo store se possibile
-			// Per ora usiamo la logica basata sulla nuova struttura di domain.BroadcastStat
+			// Per ora usiamo la logica basata sulla nuova struttura di models.BroadcastStat
 
 			// Calcolo semplificato grazie al PacketRate float64
 			currentPPS := float64(vol.Packets) // In una versione reale, useresti vol.PacketRate
@@ -124,11 +124,11 @@ func (d *AnomalyDetector) evaluateTrafficSpikes(ctx context.Context) {
 						"surge_ratio", fmt.Sprintf("%.2fx", ratio),
 					)
 
-					d.repo.RecordViolation(domain.Violation{
+					d.repo.RecordViolation(models.Violation{
 						ID:              fmt.Sprintf("surge-%s-%d-%d", s.PeerMAC, proto, now.Unix()),
 						PeerMAC:         s.PeerMAC,
-						Type:            domain.ViolationType("TRAFFIC_SPIKE"),
-						Severity:        domain.SeverityCritical,
+						Type:            models.ViolationType("TRAFFIC_SPIKE"),
+						Severity:        models.SeverityCritical,
 						PacketCount:     uint64(currentPPS),
 						SuggestedAction: fmt.Sprintf("Verificare il peer %s: traffico %s aumentato di %.1f volte.", s.PeerMAC, proto.String(), ratio),
 					})

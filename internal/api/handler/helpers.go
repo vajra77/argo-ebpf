@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"argo-ebpf/internal/presentation/dto"
+	"argo-ebpf/internal/api/dto"
 	"encoding/json"
 	"net/http"
 	"time"

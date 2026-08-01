@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+//
+// Copyright (C) 2026 Namex IXP - https://www.namex.it
+//
+// Author: Francesco Ferreri <f.ferreri@namex.it>
+// GitHub: @vajra77
+//
+// File: analyzer.c
+// Description: eBPF tool for IXP broadcast analysis
 // +build ignore
 
 typedef unsigned char __u8;

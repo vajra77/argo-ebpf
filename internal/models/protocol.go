@@ -1,4 +1,4 @@
-package domain
+package models
 
 type ProtocolType uint16
 
@@ -28,16 +28,16 @@ func (p ProtocolType) String() string {
 	}
 }
 
-func ProtocolToViolationType(p ProtocolType) ViolationType {
+func ProtocolToAlertType(p ProtocolType) AlertType {
 	switch p {
 	case ProtoIPv6RA:
-		return ViolationIPv6RA
+		return AlertIPv6RA
 	case ProtoMDNS:
-		return ViolationMDNS
+		return AlertMDNS
 	case ProtoLLMNR:
-		return ViolationLLMNR
+		return AlertLLMNR
 	case ProtoCDPLLDP:
-		return ViolationCDP
+		return AlertCDP
 	default:
 		return "UNKNOWN_VIOLATION"
 	}

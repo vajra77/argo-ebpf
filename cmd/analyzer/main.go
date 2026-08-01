@@ -1,7 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+//
+// Copyright (C) 2026 Namex IXP - https://www.namex.it
+//
+// Author: Francesco Ferreri <f.ferreri@namex.it>
+// GitHub: @vajra77
+//
+// File: main.go
+// Description: eBPF tool for IXP broadcast analysis
 package main
 
 import (
-	"argo-ebpf/internal/domain"
+	"argo-ebpf/internal/models"
 	"context"
 	"errors"
 	"log/slog"
@@ -11,11 +20,11 @@ import (
 	"syscall"
 	"time"
 
+	"argo-ebpf/internal/api"
 	"argo-ebpf/internal/infrastructure/ebpf"
 	"argo-ebpf/internal/infrastructure/repository"
-	"argo-ebpf/internal/presentation"
-	"argo-ebpf/internal/service/alert"
-	"argo-ebpf/internal/service/collector"
+	"argo-ebpf/internal/services/alert"
+	"argo-ebpf/internal/services/collector"
 
 	"github.com/joho/godotenv"
 )
@@ -57,7 +66,7 @@ func main() {
 	defer stop()
 
 	// In-Memory Repository init
-	var store domain.MetricsRepository
+	var store models.MetricsRepository
 	if redisAddr != "" {
 		store = repository.NewRedisStore(redisAddr, "", 0)
 	} else {
@@ -68,14 +77,14 @@ func main() {
 	processor := collector.NewEventProcessor(store, logger)
 
 	// eBPF/XDP loader initialization
-	bpfLoader, err := ebpf.NewLoader(iface, processor, logger)
+	bpfPoller, err := ebpf.NewPoller(iface, processor, logger)
 	if err != nil {
 		logger.Error("Failed to initialize eBPF loader", "error", err)
 		os.Exit(1)
 	}
-	defer bpfLoader.Close()
+	defer bpfPoller.Close()
 
-	if err := bpfLoader.Start(ctx); err != nil {
+	if err := bpfPoller.Start(ctx); err != nil {
 		logger.Error("Failed to start eBPF XDP hook", "error", err)
 		os.Exit(1)
 	}
@@ -86,7 +95,7 @@ func main() {
 	go anomalyDetector.Start(ctx)
 
 	// API router and server init
-	router := presentation.NewRouter(store)
+	router := api.NewRouter(store)
 	server := &http.Server{
 		Addr:         apiAddr,
 		Handler:      router,

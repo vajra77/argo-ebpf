@@ -1,13 +1,13 @@
-package presentation
+package api
 
 import (
 	"net/http"
 
-	"argo-ebpf/internal/domain"
-	"argo-ebpf/internal/presentation/handler"
+	"argo-ebpf/internal/api/handler"
+	"argo-ebpf/internal/models"
 )
 
-func NewRouter(repo domain.MetricsRepository) http.Handler {
+func NewRouter(repo models.MetricsRepository) http.Handler {
 	mux := http.NewServeMux()
 
 	broadcasterH := handler.NewBroadcasterHandler(repo)
