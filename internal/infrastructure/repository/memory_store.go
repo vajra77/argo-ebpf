@@ -42,6 +42,23 @@ func (s *InMemoryStore) UpsertStat(mac string, proto domain.ProtocolType, packet
 	now := time.Now()
 
 	if stat, exists := s.stats[key]; exists {
+		// Calcola il tempo trascorso dall'ultimo aggiornamento
+		duration := now.Sub(stat.LastUpdated).Seconds()
+		if duration <= 0 {
+			duration = 1 // Evita divisione per zero
+		}
+
+		// Calcola i delta
+		deltaPkt := packets - stat.Packets
+		deltaBytes := bytes - stat.Bytes
+
+		// Aggiorna i Rate (valori medi nell'intervallo)
+		stat.PacketRate = float64(deltaPkt) / duration
+		stat.ByteRate = float64(deltaBytes) / duration
+
+		// Aggiorna i contatori storici e attuali
+		stat.LastPackets = stat.Packets
+		stat.LastBytes = stat.Bytes
 		stat.Packets = packets
 		stat.Bytes = bytes
 		stat.LastUpdated = now

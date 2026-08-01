@@ -2,7 +2,8 @@ package dto
 
 import "time"
 
-// Standard API Wrapper per Retool
+// Standard API Wrapper
+
 type APIResponse struct {
 	Success   bool        `json:"success"`
 	Timestamp time.Time   `json:"timestamp"`
@@ -11,16 +12,20 @@ type APIResponse struct {
 }
 
 // Top Broadcaster Response Item
+
 type BroadcasterItemDTO struct {
 	PeerMAC      string            `json:"peer_mac"`
 	PeerASN      int               `json:"peer_asn,omitempty"`
 	PeerName     string            `json:"peer_name,omitempty"`
 	TotalPackets uint64            `json:"total_packets"`
 	TotalBytes   uint64            `json:"total_bytes"`
+	PPS          float64           `json:"pps"`
+	BPS          float64           `json:"bps"`
 	Protocols    map[string]uint64 `json:"protocols_bytes"`
 }
 
 // Violation Response Item
+
 type ViolationDTO struct {
 	ID              string `json:"id"`
 	PeerMAC         string `json:"peer_mac"`

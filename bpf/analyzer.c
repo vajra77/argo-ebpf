@@ -9,7 +9,7 @@ typedef unsigned long long __u64;
 #include "bpf_endian.h"
 
 /* ==========================================================================
- * STRUTTURE RETE ESSENZIALI (L2 / L3 / L4)
+ * NETWORK HEADERS for L1 / L2 / L3
  * ========================================================================== */
 
 struct ethhdr {
@@ -75,7 +75,7 @@ struct xdp_md {
     __u32 egress_ifindex;
 };
 
-/* Costanti di Rete */
+/* Network const */
 #define ETH_P_IP    0x0800
 #define ETH_P_ARP   0x0806
 #define ETH_P_IPV6  0x86DD
@@ -99,10 +99,9 @@ struct xdp_md {
 #define XDP_PASS 2
 
 /* ==========================================================================
- * STRUTTURE MAPPE E EVENTI
+ * MAPS and EVENTS structs
  * ========================================================================== */
 
-/* Struttura per le statistiche: 8 byte totali, perfettamente allineata */
 struct stats_key_t {
     __u16 proto_type;   // 2 byte
     __u8  src_mac[6];    // 6 byte
@@ -113,8 +112,6 @@ struct stats_val_t {
     __u64 bytes;         // 8 byte
 } __attribute__((packed));
 
-/* Struttura per l'evento nel Ring Buffer:
- * Ordinata a 64-bit per evitare padding nascosto */
 struct broadcast_event_t {
     __u64 timestamp_ns;   // 8 byte
     __u32 src_ip_v4;      // 4 byte
@@ -131,7 +128,7 @@ struct broadcast_event_t {
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 1024);
+    __uint(max_entries, 2048);
     __type(key, struct stats_key_t);
     __type(value, struct stats_val_t);
 } broadcast_stats SEC(".maps");
@@ -189,9 +186,13 @@ int filter_broadcast(struct xdp_md *ctx) {
     if (!(eth->h_dest[0] & 1))
         return XDP_PASS;
 
+    //
+    // Use this if you want to just analyze pure broadcast traffic
+    //
     //  if (eth->h_dest[0] != 0xFF || eth->h_dest[1] != 0xFF || eth->h_dest[2] != 0xFF ||
     //      eth->h_dest[3] != 0xFF || eth->h_dest[4] != 0xFF || eth->h_dest[5] != 0xFF)
     //      return XDP_PASS;
+    //
 
     __u16 h_proto = bpf_ntohs(eth->h_proto);
     __u64 pkt_len = (unsigned long)data_end - (unsigned long)data;
