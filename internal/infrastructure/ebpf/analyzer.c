@@ -108,7 +108,7 @@ struct stats_key_t {
 } __attribute__((packed));
 
 struct stats_val_t {
-    __u64 packets;       // 8 byte
+    __u64 packets __attribute__((aligned(8)));       // 8 byte
     __u64 bytes;         // 8 byte
 } __attribute__((packed));
 

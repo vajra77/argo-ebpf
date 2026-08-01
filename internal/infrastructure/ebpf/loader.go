@@ -12,11 +12,10 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 
-	"argo-ebpf/bpf"
 	"argo-ebpf/internal/service/collector"
 )
 
-type BpfBroadcastEventT struct {
+type BroadcastEventT struct {
 	TimestampNs uint64
 	SrcIpV4     uint32
 	TargetIpV4  uint32
@@ -30,7 +29,7 @@ type Loader struct {
 	ifaceName string
 	processor *collector.EventProcessor
 	logger    *slog.Logger
-	objs      bpf.BpfObjects
+	objs      BpfObjects
 	link      link.Link
 }
 
@@ -45,7 +44,7 @@ func NewLoader(ifaceName string, processor *collector.EventProcessor, logger *sl
 // Start carica il bytecode nel kernel, esegue l'attach XDP e avvia i worker
 func (l *Loader) Start(ctx context.Context) error {
 	// 1. Carica i programmi e le mappe eBPF nel kernel
-	if err := bpf.LoadBpfObjects(&l.objs, nil); err != nil {
+	if err := LoadBpfObjects(&l.objs, nil); err != nil {
 		return fmt.Errorf("loading eBPF objects failed: %w", err)
 	}
 
@@ -105,7 +104,7 @@ func (l *Loader) consumeRingBuffer(ctx context.Context) {
 			l.logger.Error("Received malformed RingBuffer event: too short")
 			continue
 		}
-		rawEvent := (*BpfBroadcastEventT)(unsafe.Pointer(&record.RawSample[0]))
+		rawEvent := (*BroadcastEventT)(unsafe.Pointer(&record.RawSample[0]))
 
 		// Invia l'evento grezzo al layer Service
 		domainEvent := collector.RawEvent{
@@ -139,8 +138,8 @@ func (l *Loader) pollBroadcastStats(ctx context.Context) {
 			return
 		case <-ticker.C:
 			var (
-				key bpf.BpfStatsKeyT
-				val bpf.BpfStatsValT
+				key BpfStatsKeyT
+				val BpfStatsValT
 			)
 
 			// Iteratore sulla mappa HASH eBPF broadcast_stats
