@@ -18,18 +18,8 @@ type RedisStore struct {
 	ttl    time.Duration
 }
 
-func (s *RedisStore) AddPeer(name string, asn int, macs []string) error {
-	peerKey := fmt.Sprintf("peer:asn:%d", asn)
-
-	// Creiamo o recuperiamo il peer
-	peer := new(models.Peer{
-		Name:         name,
-		ASN:          asn,
-		MACs:         macs,
-		Alerts:       make(map[string][]models.Alert),
-		TotalPackets: 0,
-		TotalBytes:   0,
-	})
+func (s *RedisStore) Save(peer models.Peer) error {
+	peerKey := fmt.Sprintf("peer:asn:%d", peer.ASN)
 
 	data, err := json.Marshal(peer)
 	if err != nil {
@@ -40,16 +30,16 @@ func (s *RedisStore) AddPeer(name string, asn int, macs []string) error {
 	pipe := s.client.Pipeline()
 	pipe.Set(s.ctx, peerKey, data, s.ttl)
 
-	for _, mac := range macs {
+	for _, mac := range peer.MACs {
 		macKey := fmt.Sprintf("peer:mac:%s", mac)
-		pipe.Set(s.ctx, macKey, asn, s.ttl)
+		pipe.Set(s.ctx, macKey, peer.ASN, s.ttl)
 	}
 
 	_, err = pipe.Exec(s.ctx)
 	return err
 }
 
-func (s *RedisStore) GetPeerByMAC(mac string) (*models.Peer, error) {
+func (s *RedisStore) RetrieveByMAC(mac string) (*models.Peer, error) {
 	macKey := fmt.Sprintf("peer:mac:%s", mac)
 
 	asn, err := s.client.Get(s.ctx, macKey).Int()
@@ -61,10 +51,10 @@ func (s *RedisStore) GetPeerByMAC(mac string) (*models.Peer, error) {
 		return nil, err
 	}
 
-	return s.GetPeerByASN(asn)
+	return s.RetrieveByASN(asn)
 }
 
-func (s *RedisStore) GetPeerByASN(asn int) (*models.Peer, error) {
+func (s *RedisStore) RetrieveByASN(asn int) (*models.Peer, error) {
 	peerKey := fmt.Sprintf("peer:asn:%d", asn)
 
 	data, err := s.client.Get(s.ctx, peerKey).Bytes()
@@ -82,21 +72,13 @@ func (s *RedisStore) GetPeerByASN(asn int) (*models.Peer, error) {
 	return &peer, nil
 }
 
-func (s *RedisStore) AddPeerAlert(mac string, alert models.Alert) error {
-	peer, err := s.GetPeerByMAC(mac)
-	if err != nil || peer == nil {
-		return fmt.Errorf("peer not found for mac %s", mac)
-	}
-
-	if peer.Alerts == nil {
-		peer.Alerts = make(map[string][]models.Alert)
-	}
-
-	peer.Alerts[string(alert.Type)] = append(peer.Alerts[string(alert.Type)], alert)
-
-	// Riassegniamo i dati aggiornati
+func (s *RedisStore) Update(peer *models.Peer) error {
 	peerKey := fmt.Sprintf("peer:asn:%d", peer.ASN)
-	data, _ := json.Marshal(peer)
+
+	data, err := json.Marshal(peer)
+	if err != nil {
+		return fmt.Errorf("failed to marshal peer for update: %w", err)
+	}
 
 	return s.client.Set(s.ctx, peerKey, data, s.ttl).Err()
 }
