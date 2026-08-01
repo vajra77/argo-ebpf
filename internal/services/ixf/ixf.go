@@ -45,21 +45,38 @@ type PeerInfo struct {
 	Addresses []AddressInfo
 }
 
-type PeerMap struct {
-	Peers map[int]*PeerInfo `json:"peers"`
-	MACs  map[string]*PeerInfo
+func (pi PeerInfo) GetMACs() []string {
+	macs := make([]string, 0, len(pi.Addresses))
+	for i, addr := range pi.Addresses {
+		macs[i] = addr.MAC
+	}
+	return macs
+}
+
+type Mapper struct {
+	IXFUrl string
+	Peers  map[int]*PeerInfo `json:"peers"`
+	MACs   map[string]*PeerInfo
 
 	mu sync.RWMutex
 }
 
-func NewPeerMap() *PeerMap {
-	return new(PeerMap{
-		Peers: make(map[int]*PeerInfo),
-		MACs:  make(map[string]*PeerInfo),
+func NewMapper(ixfUrl string) *Mapper {
+	return new(Mapper{
+		IXFUrl: ixfUrl,
+		Peers:  make(map[int]*PeerInfo),
+		MACs:   make(map[string]*PeerInfo),
 	})
 }
 
-func (pm *PeerMap) AddPeerInfo(name string, asn int) {
+func (pm *Mapper) RetrieveByMAC(mac string) *PeerInfo {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+
+	return pm.MACs[mac]
+}
+
+func (pm *Mapper) AddPeerInfo(name string, asn int) {
 	if _, ok := pm.Peers[asn]; !ok {
 		pm.Peers[asn] = new(PeerInfo{
 			Name:      name,
@@ -69,7 +86,7 @@ func (pm *PeerMap) AddPeerInfo(name string, asn int) {
 	}
 }
 
-func (pm *PeerMap) AddPeerAddress(asn int, mac, v4addr, v6addr string) error {
+func (pm *Mapper) AddPeerAddress(asn int, mac, v4addr, v6addr string) error {
 	if _, ok := pm.Peers[asn]; !ok {
 		return fmt.Errorf("peer AS%d not found", asn)
 	}
@@ -84,11 +101,11 @@ func (pm *PeerMap) AddPeerAddress(asn int, mac, v4addr, v6addr string) error {
 	return nil
 }
 
-func (pm *PeerMap) PopulateFromURL(url string) error {
+func (pm *Mapper) Refresh() error {
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := new(http.Client{Timeout: 10 * time.Second})
 
-	resp, err := client.Get(url)
+	resp, err := client.Get(pm.IXFUrl)
 	if err != nil {
 		return err
 	}

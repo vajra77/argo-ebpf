@@ -11,6 +11,7 @@ package main
 
 import (
 	"argo-ebpf/internal/models"
+	"argo-ebpf/internal/services/ixf"
 	"context"
 	"errors"
 	"log/slog"
@@ -39,6 +40,7 @@ func main() {
 	apiAddr := getEnv("API_ADDR", "127.0.0.1:8080")
 	logLevel := getEnv("LOG_LEVEL", "info")
 	redisAddr := getEnv("REDIS_ADDR", "localhost:6379")
+	ixfURL := getEnv("IXF_PROVIDER_URL", "")
 
 	// Logger init
 	var level slog.Level
@@ -66,15 +68,24 @@ func main() {
 	defer stop()
 
 	// In-Memory Repository init
-	var store models.MetricsRepository
+	var store models.Repository
 	if redisAddr != "" {
-		store = repository.NewRedisStore(redisAddr, "", 0)
-	} else {
-		store = repository.NewInMemoryStore()
+		store = repository.NewRedisStore(ctx, redisAddr, 15*time.Minute)
 	}
 
+	// Mapper control
+	mapper := ixf.NewMapper(ixfURL)
+	go func() {
+		for {
+			if err := mapper.Refresh(); err != nil {
+				logger.Error("Failed to refresh ixf mapper", "error", err)
+			}
+			time.Sleep(60 * time.Minute)
+		}
+	}()
+
 	// Event Processor init
-	processor := collector.NewEventProcessor(store, logger)
+	processor := collector.NewEventProcessor(mapper, store, logger)
 
 	// eBPF/XDP loader initialization
 	bpfPoller, err := ebpf.NewPoller(iface, processor, logger)

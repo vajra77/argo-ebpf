@@ -13,12 +13,24 @@ import (
 )
 
 type RedisStore struct {
-	client *redis.Client
 	ctx    context.Context
+	client *redis.Client
 	ttl    time.Duration
 }
 
-func (s *RedisStore) Save(peer models.Peer) error {
+func NewRedisStore(ctx context.Context, addr string, ttl time.Duration) *RedisStore {
+	client := redis.NewClient(&redis.Options{
+		Addr: addr,
+	})
+
+	return new(RedisStore{
+		ctx:    ctx,
+		client: client,
+		ttl:    ttl,
+	})
+}
+
+func (s *RedisStore) Save(peer *models.Peer) error {
 	peerKey := fmt.Sprintf("peer:asn:%d", peer.ASN)
 
 	data, err := json.Marshal(peer)
