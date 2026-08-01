@@ -105,12 +105,13 @@ func (s *InMemoryStore) RecordViolation(v domain.Violation) {
 	if existing, exists := s.violations[key]; exists {
 		existing.PacketCount++
 		existing.LastSeen = now
-		existing.SrcIP = v.SrcIP // aggiorna con l'ultimo IP sorgente usato
+		existing.SrcIP = v.SrcIP
 	} else {
-		v.FirstSeen = now
-		v.LastSeen = now
-		v.PacketCount = 1
-		s.violations[key] = &v
+		newViolation := v
+		newViolation.FirstSeen = now
+		newViolation.LastSeen = now
+		newViolation.PacketCount = 1
+		s.violations[key] = &newViolation
 	}
 }
 
@@ -164,4 +165,17 @@ func (s *InMemoryStore) GetARPAnomalies(ctx context.Context) ([]domain.TargetARP
 		result = append(result, *a)
 	}
 	return result, nil
+}
+
+func (s *InMemoryStore) Cleanup(ttl time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	for k, v := range s.stats {
+		if now.Sub(v.LastUpdated) > ttl {
+			delete(s.stats, k)
+		}
+	}
+	// Ripetere logicamente per violations e arpAnomalies se necessario
 }

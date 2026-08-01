@@ -115,7 +115,7 @@ struct stats_val_t {
 
 /* Struttura per l'evento nel Ring Buffer:
  * Ordinata a 64-bit per evitare padding nascosto */
-struct violation_event_t {
+struct broadcast_event_t {
     __u64 timestamp_ns;   // 8 byte
     __u32 src_ip_v4;      // 4 byte
     __u32 target_ip_v4;   // 4 byte
@@ -160,8 +160,8 @@ static __always_inline void update_stats(__u8 src_mac[6], __u16 proto_type, __u6
     }
 }
 
-static __always_inline void send_event(struct violation_event_t *event) {
-    struct violation_event_t *ring_event;
+static __always_inline void send_event(struct broadcast_event_t *event) {
+    struct broadcast_event_t *ring_event;
 
     ring_event = bpf_ringbuf_reserve(&events, sizeof(*ring_event), 0);
     if (!ring_event)
@@ -189,11 +189,15 @@ int filter_broadcast(struct xdp_md *ctx) {
     if (!(eth->h_dest[0] & 1))
         return XDP_PASS;
 
+    //  if (eth->h_dest[0] != 0xFF || eth->h_dest[1] != 0xFF || eth->h_dest[2] != 0xFF ||
+    //      eth->h_dest[3] != 0xFF || eth->h_dest[4] != 0xFF || eth->h_dest[5] != 0xFF)
+    //      return XDP_PASS;
+
     __u16 h_proto = bpf_ntohs(eth->h_proto);
     __u64 pkt_len = (unsigned long)data_end - (unsigned long)data;
     __u16 proto_type = PROTO_UNKNOWN;
 
-    struct violation_event_t event = {};
+    struct broadcast_event_t event = {};
     __builtin_memcpy(event.src_mac, eth->h_source, 6);
     event.pkt_len = (__u16)pkt_len;
 

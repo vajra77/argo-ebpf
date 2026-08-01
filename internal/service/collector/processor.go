@@ -11,12 +11,13 @@ import (
 )
 
 type RawEvent struct {
-	SrcMAC     [6]byte
-	ProtoType  uint16
-	SrcIPv4    uint32
-	SrcIPv6    [16]byte
-	TargetIPv4 uint32
-	PktLen     uint16
+	TimestampNs uint64
+	SrcIPv4     uint32
+	TargetIPv4  uint32
+	SrcIPv6     [16]byte
+	ProtoType   uint16
+	PktLen      uint16
+	SrcMAC      [6]byte
 }
 
 type EventProcessor struct {
@@ -92,6 +93,6 @@ func (p *EventProcessor) parseIPv4(ipFix uint32) string {
 		return ""
 	}
 	ip := make(net.IP, 4)
-	binary.LittleEndian.PutUint32(ip, ipFix)
+	binary.BigEndian.PutUint32(ip, ipFix)
 	return ip.String()
 }

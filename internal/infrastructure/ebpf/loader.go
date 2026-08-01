@@ -1,14 +1,13 @@
 package ebpf
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
@@ -17,8 +16,7 @@ import (
 	"argo-ebpf/internal/service/collector"
 )
 
-// Structural alignment identica alla struct violation_event_t del C
-type BpfViolationEventT struct {
+type BpfBroadcastEventT struct {
 	TimestampNs uint64
 	SrcIpV4     uint32
 	TargetIpV4  uint32
@@ -92,48 +90,47 @@ func (l *Loader) consumeRingBuffer(ctx context.Context) {
 		_ = rd.Close()
 	}()
 
-	var rawEvent BpfViolationEventT
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			record, err := rd.Read()
-			if err != nil {
-				if errors.Is(err, ringbuf.ErrClosed) {
-					l.logger.Info("RingBuffer reader closed")
-					return
-				}
-				l.logger.Warn("Error reading from RingBuffer", "error", err)
-				continue
+		record, err := rd.Read()
+		if err != nil {
+			if errors.Is(err, ringbuf.ErrClosed) {
+				l.logger.Info("RingBuffer reader closed")
+				return
 			}
+			l.logger.Warn("Error reading from RingBuffer", "error", err)
+			continue
+		}
 
-			// Parse binario dell'evento direttamente nella struct Go
-			if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &rawEvent); err != nil {
-				l.logger.Error("Failed to parse RingBuffer event", "error", err)
-				continue
-			}
+		if len(record.RawSample) < 44 { // Dimensione attesa della struct packed
+			l.logger.Error("Received malformed RingBuffer event: too short")
+			continue
+		}
+		rawEvent := (*BpfBroadcastEventT)(unsafe.Pointer(&record.RawSample[0]))
 
-			// Invia l'evento grezzo al layer Service
-			domainEvent := collector.RawEvent{
-				SrcMAC:     rawEvent.SrcMac,
-				ProtoType:  rawEvent.ProtoType,
-				SrcIPv4:    rawEvent.SrcIpV4,
-				SrcIPv6:    rawEvent.SrcIpV6,
-				TargetIPv4: rawEvent.TargetIpV4,
-				PktLen:     rawEvent.PktLen,
-			}
+		// Invia l'evento grezzo al layer Service
+		domainEvent := collector.RawEvent{
+			TimestampNs: rawEvent.TimestampNs,
+			SrcIPv4:     rawEvent.SrcIpV4,
+			TargetIPv4:  rawEvent.TargetIpV4,
+			SrcIPv6:     rawEvent.SrcIpV6,
+			ProtoType:   rawEvent.ProtoType,
+			PktLen:      rawEvent.PktLen,
+			SrcMAC:      rawEvent.SrcMac,
+		}
 
-			if err := l.processor.ProcessRingEvent(ctx, domainEvent); err != nil {
-				l.logger.Warn("Failed to process event in application layer", "error", err)
+		if err := l.processor.ProcessRingEvent(ctx, domainEvent); err != nil {
+			// Se l'errore è dovuto all'annullamento del contesto, usciamo
+			if errors.Is(err, ctx.Err()) {
+				return
 			}
+			l.logger.Warn("Failed to process event in application layer", "error", err)
 		}
 	}
 }
 
 // pollBroadcastStats legge ad intervalli regolari la mappa HASH con i totali dei byte/pacchetti
 func (l *Loader) pollBroadcastStats(ctx context.Context) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -149,7 +146,8 @@ func (l *Loader) pollBroadcastStats(ctx context.Context) {
 			// Iteratore sulla mappa HASH eBPF broadcast_stats
 			iterator := l.objs.BroadcastStats.Iterate()
 			for iterator.Next(&key, &val) {
-				// Invia i dati aggregati al Service Layer per aggiornare le metriche e le serie temporali
+				// Passa i dati al processore.
+				// Se p.repo.UpsertStat è sincrona, questo loop dura quanto il processamento di tutti i peer.
 				l.processor.ProcessStatsMetric(key.SrcMac, key.ProtoType, val.Packets, val.Bytes)
 			}
 

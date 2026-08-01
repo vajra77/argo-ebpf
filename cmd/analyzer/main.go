@@ -19,13 +19,13 @@ import (
 )
 
 func main() {
-	// 1. Parsing dei flag da linea di comando
+	// command line flags
 	iface := flag.String("iface", "eth0", "Interfaccia di rete da monitorare (es. eth0, bond0)")
 	apiAddr := flag.String("api-addr", ":8080", "Indirizzo di ascolto per le API REST Retool")
 	logLevel := flag.String("log-level", "info", "Livello di log (debug, info, warn, error)")
 	flag.Parse()
 
-	// 2. Inizializzazione Logger Strutturato (slog)
+	// Logger init
 	var level slog.Level
 	switch *logLevel {
 	case "debug":
@@ -46,17 +46,17 @@ func main() {
 		"api_address", *apiAddr,
 	)
 
-	// 3. Gestione del Context per lo Shutdown Pulito
+	// Context for graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// 4. Inizializzazione Repository In-Memory (Domain Storage)
+	// In-Memory Repository init
 	memStore := repository.NewInMemoryStore()
 
-	// 5. Inizializzazione Event Processor (Service Layer)
+	// Event Processor init
 	processor := collector.NewEventProcessor(memStore, logger)
 
-	// 6. Inizializzazione e Avvio Loader eBPF / XDP (Infrastructure Layer)
+	// eBPF/XDP loader initialization
 	bpfLoader, err := ebpf.NewLoader(*iface, processor, logger)
 	if err != nil {
 		logger.Error("Failed to initialize eBPF loader", "error", err)
@@ -70,11 +70,11 @@ func main() {
 	}
 	logger.Info("eBPF XDP hook attached successfully", "interface", *iface)
 
-	// 7. Avvio Anomaly Detector Engine (Background Worker)
+	// Anomaly Detector Engine (Background Worker)
 	anomalyDetector := alert.NewAnomalyDetector(memStore, alert.DefaultConfig(), logger)
 	go anomalyDetector.Start(ctx)
 
-	// 8. Inizializzazione Router e Server HTTP REST per Retool (Presentation Layer)
+	// API router and server init
 	router := presentation.NewRouter(memStore)
 	server := &http.Server{
 		Addr:         *apiAddr,
@@ -85,18 +85,18 @@ func main() {
 	}
 
 	go func() {
-		logger.Info("REST API Server running for Retool integration", "address", *apiAddr)
+		logger.Info("REST API Server running", "address", *apiAddr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("HTTP API Server failure", "error", err)
 			stop()
 		}
 	}()
 
-	// 9. Attesa del segnale di terminazione (SIGINT / SIGTERM)
+	// Waiting for SIGINT/SIGTERM
 	<-ctx.Done()
 	logger.Info("Shutdown signal received, starting graceful teardown...")
 
-	// Context con timeout per chiudere il server HTTP ed staccare eBPF pulitamente
+	// Context with timeout to gracefully shutdown HTTP server and eBPF
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 
