@@ -1,0 +1,35 @@
+[Unit]
+Description=Argo eBPF - IXP L2 Broadcast & Policy Sentinel
+Documentation=https://github.com/your-org/argo-ebpf
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+# Percorso del binario e parametri di avvio
+# Modifica 'eth0' con l'interfaccia di peering/LAN dell'IXP (es. bond0, eth1)
+ExecStart=/usr/local/bin/argo-ebpf -iface eth0 -api-addr :8080 -log-level info
+
+# Politica di Riavvio
+Restart=always
+RestartSec=5s
+
+# Limitazioni e Risorse
+LimitMEMLOCK=infinity
+LimitNOFILE=65536
+
+# Hardening e Privilegi minimi (Kernel Linux >= 5.8)
+# Se si esegue come utente non-root con BPF capabilities abilitate:
+CapabilityBoundingSet=CAP_BPF CAP_NET_ADMIN CAP_PERFMON CAP_SYS_RESOURCE
+AmbientCapabilities=CAP_BPF CAP_NET_ADMIN CAP_PERFMON CAP_SYS_RESOURCE
+
+# Logging verso Journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=argo-ebpf
+
+[Install]
+WantedBy=multi-user.target
