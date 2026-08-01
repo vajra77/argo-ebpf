@@ -1,12 +1,11 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-//
-// Copyright (C) 2026 Namex IXP - https://www.namex.it
-//
-// Author: Francesco Ferreri <f.ferreri@namex.it>
-// GitHub: @vajra77
-//
-// File: main.go
-// Description: eBPF tool for IXP broadcast analysis
+/*
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Copyright (C) 2026 Namex IXP. All rights reserved.
+ *
+ * Author: Francesco Ferreri <f.ferreri@namex.it>
+ * GitHub: @vajra77
+ */
 package main
 
 import (
