@@ -20,12 +20,12 @@ import (
 // Structural alignment identica alla struct violation_event_t del C
 type BpfViolationEventT struct {
 	TimestampNs uint64
-	SrcMac      [6]byte
-	ProtoType   uint16
 	SrcIpV4     uint32
-	SrcIpV6     [16]byte
 	TargetIpV4  uint32
+	SrcIpV6     [16]byte
+	ProtoType   uint16
 	PktLen      uint16
+	SrcMac      [6]byte
 }
 
 type Loader struct {
@@ -94,34 +94,39 @@ func (l *Loader) consumeRingBuffer(ctx context.Context) {
 
 	var rawEvent BpfViolationEventT
 	for {
-		record, err := rd.Read()
-		if err != nil {
-			if errors.Is(err, ringbuf.ErrClosed) {
-				l.logger.Info("RingBuffer reader closed")
-				return
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			record, err := rd.Read()
+			if err != nil {
+				if errors.Is(err, ringbuf.ErrClosed) {
+					l.logger.Info("RingBuffer reader closed")
+					return
+				}
+				l.logger.Warn("Error reading from RingBuffer", "error", err)
+				continue
 			}
-			l.logger.Warn("Error reading from RingBuffer", "error", err)
-			continue
-		}
 
-		// Parse binario dell'evento direttamente nella struct Go
-		if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &rawEvent); err != nil {
-			l.logger.Error("Failed to parse RingBuffer event", "error", err)
-			continue
-		}
+			// Parse binario dell'evento direttamente nella struct Go
+			if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &rawEvent); err != nil {
+				l.logger.Error("Failed to parse RingBuffer event", "error", err)
+				continue
+			}
 
-		// Invia l'evento grezzo al layer Service (EventProcessor) per correlazione ed enrichment
-		domainEvent := collector.RawEvent{
-			SrcMAC:     rawEvent.SrcMac,
-			ProtoType:  rawEvent.ProtoType,
-			SrcIPv4:    rawEvent.SrcIpV4,
-			SrcIPv6:    rawEvent.SrcIpV6,
-			TargetIPv4: rawEvent.TargetIpV4,
-			PktLen:     rawEvent.PktLen,
-		}
+			// Invia l'evento grezzo al layer Service
+			domainEvent := collector.RawEvent{
+				SrcMAC:     rawEvent.SrcMac,
+				ProtoType:  rawEvent.ProtoType,
+				SrcIPv4:    rawEvent.SrcIpV4,
+				SrcIPv6:    rawEvent.SrcIpV6,
+				TargetIPv4: rawEvent.TargetIpV4,
+				PktLen:     rawEvent.PktLen,
+			}
 
-		if err := l.processor.ProcessRingEvent(ctx, domainEvent); err != nil {
-			l.logger.Warn("Failed to process event in application layer", "error", err)
+			if err := l.processor.ProcessRingEvent(ctx, domainEvent); err != nil {
+				l.logger.Warn("Failed to process event in application layer", "error", err)
+			}
 		}
 	}
 }

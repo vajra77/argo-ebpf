@@ -102,25 +102,28 @@ struct xdp_md {
  * STRUTTURE MAPPE E EVENTI
  * ========================================================================== */
 
+/* Struttura per le statistiche: 8 byte totali, perfettamente allineata */
 struct stats_key_t {
-    __u8  src_mac[6];
-    __u16 proto_type;
-};
+    __u16 proto_type;   // 2 byte
+    __u8  src_mac[6];    // 6 byte
+} __attribute__((packed));
 
 struct stats_val_t {
-    __u64 packets;
-    __u64 bytes;
-};
+    __u64 packets;       // 8 byte
+    __u64 bytes;         // 8 byte
+} __attribute__((packed));
 
+/* Struttura per l'evento nel Ring Buffer:
+ * Ordinata a 64-bit per evitare padding nascosto */
 struct violation_event_t {
-    __u64 timestamp_ns;
-    __u8  src_mac[6];
-    __u16 proto_type;
-    __u32 src_ip_v4;
-    __u8  src_ip_v6[16];
-    __u32 target_ip_v4;
-    __u16 pkt_len;
-};
+    __u64 timestamp_ns;   // 8 byte
+    __u32 src_ip_v4;      // 4 byte
+    __u32 target_ip_v4;   // 4 byte
+    __u8  src_ip_v6[16];  // 16 byte
+    __u16 proto_type;     // 2 byte
+    __u16 pkt_len;        // 2 byte
+    __u8  src_mac[6];     // 6 byte
+} __attribute__((packed));
 
 /* ==========================================================================
  * MAPPE eBPF
@@ -250,7 +253,20 @@ int filter_broadcast(struct xdp_md *ctx) {
         event.src_ip_v4 = ip4->saddr;
 
         if (ip4->protocol == IPPROTO_UDP) {
-            struct udphdr *udp = (void *)((unsigned char *)ip4 + (ip4->ihl * 4));
+            /* 1. Estrai l'IHL e applica un mascheramento bit a bit.
+             * Questo dice al Verifier che il valore non può superare 15. */
+            __u32 ihl = ip4->ihl & 0x0f;
+            __u32 ip_hlen = ihl * 4;
+
+            /* 2. Controllo di sicurezza stringente per il Verifier.
+             * L'header IP standard va da 20 a 60 byte. */
+            if (ip_hlen < sizeof(struct iphdr) || ip_hlen > 60)
+                return XDP_PASS;
+
+            /* 3. Calcola la posizione dell'header UDP usando l'offset verificato */
+            struct udphdr *udp = (void *)((unsigned char *)ip4 + ip_hlen);
+
+            /* 4. Verifica di sicurezza obbligatoria sui limiti del pacchetto */
             if ((void *)(udp + 1) > data_end)
                 return XDP_PASS;
 

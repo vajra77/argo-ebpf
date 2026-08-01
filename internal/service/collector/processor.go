@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"log/slog"
 	"net"
@@ -90,6 +91,7 @@ func (p *EventProcessor) parseIPv4(ipFix uint32) string {
 	if ipFix == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%d.%d.%d.%d",
-		byte(ipFix), byte(ipFix>>8), byte(ipFix>>16), byte(ipFix>>24))
+	ip := make(net.IP, 4)
+	binary.LittleEndian.PutUint32(ip, ipFix)
+	return ip.String()
 }
