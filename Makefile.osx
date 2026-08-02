@@ -1,5 +1,5 @@
 # ==============================================================================
-# argo-ebpf - OS-X Production Makefile
+# argo-ebpf - macOS Development Makefile
 # ==============================================================================
 
 BINARY_NAME=argo-ebpf
@@ -8,11 +8,20 @@ CMD_DIR=./cmd/analyzer
 IFACE?=eth0
 API_ADDR?=:8080
 
-GO?=go
-CLANG?=/opt/homebrew/opt/llvm/bin/clang
-LLVM_STRIP?=/opt/homebrew/opt/llvm/bin/llvm-strip
-LDFLAGS="-L/opt/homebrew/opt/llvm/lib"
-CPPFLAGS="-I/opt/homebrew/opt/llvm/include"
+# 1. Rileva la directory di Homebrew in base all'architettura (ARM vs Intel)
+HOMEBREW_PREFIX ?= $(shell brew --prefix 2>/dev/null || ( [ -d /opt/homebrew ] && echo /opt/homebrew || echo /usr/local ))
+
+# 2. Trova il binario di Clang direttamente dentro Cellar o opt
+CLANG_BIN := $(firstword $(wildcard $(HOMEBREW_PREFIX)/Cellar/llvm/*/bin/clang) \
+                        $(wildcard $(HOMEBREW_PREFIX)/opt/llvm/bin/clang))
+
+STRIP_BIN := $(firstword $(wildcard $(HOMEBREW_PREFIX)/Cellar/llvm/*/bin/llvm-strip) \
+                        $(wildcard $(HOMEBREW_PREFIX)/opt/llvm/bin/llvm-strip))
+
+export CLANG ?= $(CLANG_BIN)
+export LLVM_STRIP ?= $(STRIP_BIN)
+
+GO ?= go
 
 .PHONY: all generate build run test lint clean help
 
@@ -21,6 +30,8 @@ all: generate build
 
 ## generate: Compila il C eBPF e genera i binding Go
 generate:
+	@echo "==> Usando CLANG: $(CLANG)"
+	@echo "==> Usando LLVM_STRIP: $(LLVM_STRIP)"
 	@echo "==> Generazione binding eBPF (bpf2go)..."
 	CLANG="$(CLANG)" LLVM_STRIP="$(LLVM_STRIP)" $(GO) generate ./internal/infrastructure/ebpf/...
 
@@ -48,7 +59,7 @@ lint:
 clean:
 	@echo "==> Pulizia artefatti..."
 	rm -rf $(BUILD_DIR)
-	rm -f bpf/bpf_bpfel.go bpf/bpf_bpfel.o bpf/bpf_bpfeb.go bpf/bpf_bpfeb.o
+	rm -f internal/infrastructure/ebpf/bpf_bpfel.go internal/infrastructure/ebpf/bpf_bpfel.o internal/infrastructure/ebpf/bpf_bpfeb.go internal/infrastructure/ebpf/bpf_bpfeb.o
 
 ## help: Mostra questo messaggio di aiuto
 help:
