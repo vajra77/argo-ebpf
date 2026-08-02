@@ -9,8 +9,10 @@
 package main
 
 import (
+	"argo-ebpf/internal/api"
 	"argo-ebpf/internal/domain/peer"
 	"argo-ebpf/internal/services/ixf"
+	"argo-ebpf/internal/services/queries"
 	"context"
 	"errors"
 	"log/slog"
@@ -20,7 +22,6 @@ import (
 	"syscall"
 	"time"
 
-	"argo-ebpf/internal/api"
 	"argo-ebpf/internal/infrastructure/ebpf"
 	"argo-ebpf/internal/infrastructure/repository"
 	"argo-ebpf/internal/services/collector"
@@ -39,6 +40,7 @@ func main() {
 	logLevel := getEnv("LOG_LEVEL", "info")
 	redisAddr := getEnv("REDIS_ADDR", "localhost:6379")
 	ixfURL := getEnv("IXF_PROVIDER_URL", "")
+	apiKey := getEnv("API_KEY", "")
 
 	// Logger init
 	var level slog.Level
@@ -65,13 +67,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	store := repository.NewRedisPeerStore(ctx, redisAddr, 24*time.Hour)
+	peerStore := repository.NewRedisPeerStore(ctx, redisAddr, 24*time.Hour)
 
 	// Mapper control
 	mapper := ixf.NewMapper(ixfURL)
 
 	// Cache control
-	peerCache := collector.NewPeerCache(mapper, store)
+	peerCache := collector.NewPeerCache(mapper, peerStore)
 	go func() {
 		ticker := time.NewTicker(peer.DefaultTTL())
 		defer ticker.Stop()
@@ -110,14 +112,18 @@ func main() {
 	logger.Info("eBPF XDP hook attached successfully", "interface", iface)
 
 	// API router and server init
-	router := api.NewRouter(store)
-	server := &http.Server{
+	mux := http.NewServeMux()
+	peerQueries := queries.NewPeerQueryService(peerStore)
+	peerApi := api.NewPeerAPI(peerQueries, []string{apiKey})
+	peerApi.RegisterRoutes(mux, "/api/v1")
+
+	server := new(http.Server{
 		Addr:         apiAddr,
-		Handler:      router,
+		Handler:      mux,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  120 * time.Second,
-	}
+	})
 
 	go func() {
 		logger.Info("REST API Server running", "address", apiAddr)

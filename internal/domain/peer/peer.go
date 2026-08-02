@@ -58,7 +58,7 @@ func (p *Peer) MarshalJSON() ([]byte, error) {
 		ASN:          p.asn,
 		MACs:         p.macs,
 		TotalPackets: p.totalPackets,
-		AveragePPS:   float64(p.totalPackets) / DefaultTTL().Seconds(),
+		AveragePPS:   p.AveragePPS(),
 		ARPs:         p.arps,
 		Alerts:       p.alerts,
 		LastSeen:     p.lastSeen,
@@ -111,6 +111,35 @@ func (p *Peer) TotalPackets() uint64 {
 	defer p.mu.RUnlock()
 
 	return p.totalPackets
+}
+
+func (p *Peer) AveragePPS() float64 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	return float64(p.totalPackets) / DefaultTTL().Seconds()
+}
+
+func (p *Peer) Alerts() []*Alert {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	alerts := make([]*Alert, 0)
+	for _, v := range p.alerts {
+		alerts = append(alerts, v)
+	}
+	return alerts
+}
+
+func (p *Peer) ARPs() []*ARPRequest {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	arpRequests := make([]*ARPRequest, 0)
+	for _, v := range p.arps {
+		arpRequests = append(arpRequests, v)
+	}
+	return arpRequests
 }
 
 func (p *Peer) LastSeen() time.Time {
