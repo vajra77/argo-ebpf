@@ -14,14 +14,14 @@ import (
 	"time"
 
 	"argo-ebpf/internal/api/dto"
-	"argo-ebpf/internal/models"
+	"argo-ebpf/internal/domain"
 )
 
 type AnomalyHandler struct {
-	repo models.MetricsRepository
+	repo domain.MetricsRepository
 }
 
-func NewAnomalyHandler(repo models.MetricsRepository) *AnomalyHandler {
+func NewAnomalyHandler(repo domain.MetricsRepository) *AnomalyHandler {
 	return &AnomalyHandler{repo: repo}
 }
 

@@ -7,11 +7,10 @@
  * GitHub: @vajra77
  */
 
-package models
+package peer
 
 type Repository interface {
-	Save(peer *Peer) error
-	Update(peer *Peer) error
+	Upsert(p *Peer) error
 	RetrieveByMAC(mac string) (*Peer, error)
 	RetrieveByASN(asn int) (*Peer, error)
 }

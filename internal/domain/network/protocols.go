@@ -7,7 +7,9 @@
  * GitHub: @vajra77
  */
 
-package models
+package network
+
+import "argo-ebpf/internal/domain/peer"
 
 type ProtocolType uint16
 
@@ -37,16 +39,16 @@ func (p ProtocolType) String() string {
 	}
 }
 
-func ProtocolToAlertType(p ProtocolType) AlertType {
+func ProtocolToAlertType(p ProtocolType) peer.AlertType {
 	switch p {
 	case ProtoIPv6RA:
-		return AlertIPv6RA
+		return peer.AlertIPv6RA
 	case ProtoMDNS:
-		return AlertMDNS
+		return peer.AlertMDNS
 	case ProtoLLMNR:
-		return AlertLLMNR
+		return peer.AlertLLMNR
 	case ProtoCDPLLDP:
-		return AlertCDP
+		return peer.AlertCDP
 	default:
 		return "UNKNOWN_VIOLATION"
 	}

@@ -14,14 +14,14 @@ import (
 	"time"
 
 	"argo-ebpf/internal/api/dto"
-	"argo-ebpf/internal/models"
+	"argo-ebpf/internal/domain"
 )
 
 type ViolationHandler struct {
-	repo models.MetricsRepository
+	repo domain.MetricsRepository
 }
 
-func NewViolationHandler(repo models.MetricsRepository) *ViolationHandler {
+func NewViolationHandler(repo domain.MetricsRepository) *ViolationHandler {
 	return &ViolationHandler{repo: repo}
 }
 

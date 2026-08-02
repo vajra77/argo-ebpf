@@ -9,7 +9,7 @@
 package main
 
 import (
-	"argo-ebpf/internal/models"
+	"argo-ebpf/internal/domain/peer"
 	"argo-ebpf/internal/services/ixf"
 	"context"
 	"errors"
@@ -23,7 +23,6 @@ import (
 	"argo-ebpf/internal/api"
 	"argo-ebpf/internal/infrastructure/ebpf"
 	"argo-ebpf/internal/infrastructure/repository"
-	"argo-ebpf/internal/services/alert"
 	"argo-ebpf/internal/services/collector"
 
 	"github.com/joho/godotenv"
@@ -66,25 +65,35 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// In-Memory Repository init
-	var store models.Repository
-	if redisAddr != "" {
-		store = repository.NewRedisStore(ctx, redisAddr, 15*time.Minute)
-	}
+	store := repository.NewRedisPeerStore(ctx, redisAddr, 24*time.Hour)
 
 	// Mapper control
 	mapper := ixf.NewMapper(ixfURL)
+
+	// Cache control
+	peerCache := collector.NewPeerCache(mapper, store)
 	go func() {
+		ticker := time.NewTicker(peer.DefaultTTL())
+		defer ticker.Stop()
+
 		for {
-			if err := mapper.Refresh(); err != nil {
-				logger.Error("Failed to refresh ixf mapper", "error", err)
+			select {
+			case <-ctx.Done():
+				logger.Info("Stopping peer cache flusher")
+				peerCache.Flush()
+				return
+			case <-ticker.C:
+				// flush cache to redis store
+				flushErrors := peerCache.Flush()
+				if len(flushErrors) > 0 {
+					logger.Error("Errors while flushing peer cache", "errors", flushErrors)
+				}
 			}
-			time.Sleep(60 * time.Minute)
 		}
 	}()
 
 	// Event Processor init
-	processor := collector.NewEventProcessor(mapper, store, logger)
+	processor := collector.NewEventProcessor(peerCache, logger)
 
 	// eBPF/XDP loader initialization
 	bpfPoller, err := ebpf.NewPoller(iface, processor, logger)
@@ -99,10 +108,6 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("eBPF XDP hook attached successfully", "interface", iface)
-
-	// Anomaly Detector Engine (Background Worker)
-	anomalyDetector := alert.NewAnomalyDetector(store, alert.DefaultConfig(), logger)
-	go anomalyDetector.Start(ctx)
 
 	// API router and server init
 	router := api.NewRouter(store)

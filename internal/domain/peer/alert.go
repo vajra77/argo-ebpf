@@ -1,0 +1,192 @@
+/*
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Copyright (C) 2026 Namex IXP. All rights reserved.
+ *
+ * Author: Francesco Ferreri <f.ferreri@namex.it>
+ * GitHub: @vajra77
+ */
+
+package peer
+
+import (
+	"encoding/json"
+	"sync"
+	"time"
+)
+
+type AlertType string
+
+const (
+	AlertIPv6RA AlertType = "IPV6_ROUTER_ADVERTISEMENT"
+	AlertMDNS   AlertType = "MDNS_BROADCAST"
+	AlertLLMNR  AlertType = "LLMNR_BROADCAST"
+	AlertCDP    AlertType = "CDP_LLDP_FRAME"
+)
+
+type Severity string
+
+const (
+	SeverityWarning  Severity = "WARNING"
+	SeverityCritical Severity = "CRITICAL"
+)
+
+type Alert struct {
+	id              string
+	peerMAC         string
+	srcIP           string
+	alertType       AlertType
+	severity        Severity
+	suggestedAction string
+	packetCount     uint64
+	firstSeen       time.Time
+	lastSeen        time.Time
+
+	mu sync.RWMutex
+}
+
+func (a *Alert) ID() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.id
+}
+
+func (a *Alert) PeerMAC() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.peerMAC
+}
+
+func (a *Alert) SrcIP() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.srcIP
+}
+
+func (a *Alert) AlertType() AlertType {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.alertType
+}
+
+func (a *Alert) Severity() Severity {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.severity
+}
+
+func (a *Alert) SuggestedAction() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.suggestedAction
+}
+
+func (a *Alert) PacketCount() uint64 {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.packetCount
+}
+
+func (a *Alert) FirstSeen() time.Time {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.firstSeen
+}
+
+func (a *Alert) LastSeen() time.Time {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.lastSeen
+}
+
+func (a *Alert) MarshalJSON() ([]byte, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return json.Marshal(&struct {
+		ID              string    `json:"id"`
+		PeerMAC         string    `json:"peer_mac"`
+		SrcIP           string    `json:"src_ip"`
+		AlertType       AlertType `json:"type"`
+		Severity        Severity  `json:"severity"`
+		SuggestedAction string    `json:"suggested_action"`
+		PacketCount     uint64    `json:"packet_count"`
+		FirstSeen       time.Time `json:"first_seen"`
+		LastSeen        time.Time `json:"last_seen"`
+	}{
+		ID:              a.id,
+		PeerMAC:         a.peerMAC,
+		SrcIP:           a.srcIP,
+		AlertType:       a.alertType,
+		Severity:        a.severity,
+		SuggestedAction: a.suggestedAction,
+		PacketCount:     a.packetCount,
+		FirstSeen:       a.firstSeen,
+		LastSeen:        a.lastSeen,
+	})
+}
+
+func (a *Alert) UnmarshalJSON(data []byte) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	aux := &struct {
+		ID              string    `json:"id"`
+		PeerMAC         string    `json:"peer_mac"`
+		SrcIP           string    `json:"src_ip"`
+		AlertType       AlertType `json:"type"`
+		Severity        Severity  `json:"severity"`
+		SuggestedAction string    `json:"suggested_action"`
+		PacketCount     uint64    `json:"packet_count"`
+		FirstSeen       time.Time `json:"first_seen"`
+		LastSeen        time.Time `json:"last_seen"`
+	}{}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	a.id = aux.ID
+	a.peerMAC = aux.PeerMAC
+	a.srcIP = aux.SrcIP
+	a.alertType = aux.AlertType
+	a.severity = aux.Severity
+	a.suggestedAction = aux.SuggestedAction
+	a.packetCount = aux.PacketCount
+	a.firstSeen = aux.FirstSeen
+	a.lastSeen = aux.LastSeen
+
+	return nil
+}
+
+func NewAlert(id string, srcMAC, srcIP string, alertType AlertType, severity Severity, sugg string) *Alert {
+	now := time.Now()
+	return new(Alert{
+		id:              id,
+		peerMAC:         srcMAC,
+		srcIP:           srcIP,
+		alertType:       alertType,
+		severity:        severity,
+		suggestedAction: sugg,
+		packetCount:     1,
+		firstSeen:       now,
+		lastSeen:        now,
+	})
+}
+
+func (a *Alert) Update() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.packetCount++
+	a.lastSeen = time.Now()
+}
