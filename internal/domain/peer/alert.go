@@ -11,7 +11,6 @@ package peer
 
 import (
 	"encoding/json"
-	"sync"
 	"time"
 )
 
@@ -41,77 +40,45 @@ type Alert struct {
 	packetCount     uint64
 	firstSeen       time.Time
 	lastSeen        time.Time
-
-	mu sync.RWMutex
 }
 
 func (a *Alert) ID() string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.id
 }
 
 func (a *Alert) PeerMAC() string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.peerMAC
 }
 
 func (a *Alert) SrcIP() string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.srcIP
 }
 
 func (a *Alert) AlertType() AlertType {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.alertType
 }
 
 func (a *Alert) Severity() Severity {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.severity
 }
 
 func (a *Alert) SuggestedAction() string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.suggestedAction
 }
 
 func (a *Alert) PacketCount() uint64 {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.packetCount
 }
 
 func (a *Alert) FirstSeen() time.Time {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.firstSeen
 }
 
 func (a *Alert) LastSeen() time.Time {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.lastSeen
 }
 
 func (a *Alert) MarshalJSON() ([]byte, error) {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return json.Marshal(&struct {
 		ID              string    `json:"id"`
 		PeerMAC         string    `json:"peer_mac"`
@@ -136,9 +103,6 @@ func (a *Alert) MarshalJSON() ([]byte, error) {
 }
 
 func (a *Alert) UnmarshalJSON(data []byte) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	aux := &struct {
 		ID              string    `json:"id"`
 		PeerMAC         string    `json:"peer_mac"`
@@ -184,9 +148,6 @@ func NewAlert(id string, srcMAC, srcIP string, alertType AlertType, severity Sev
 }
 
 func (a *Alert) Update() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	a.packetCount++
 	a.lastSeen = time.Now()
 }

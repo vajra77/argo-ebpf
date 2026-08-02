@@ -11,7 +11,6 @@ package peer
 
 import (
 	"encoding/json"
-	"sync"
 	"time"
 )
 
@@ -22,56 +21,33 @@ type ARPRequest struct {
 	packetCount uint64
 	firstSeen   time.Time
 	lastSeen    time.Time
-
-	mu sync.RWMutex
 }
 
 func (a *ARPRequest) ID() string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.id
 }
 
 func (a *ARPRequest) SrcMAC() string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.srcMAC
 }
 
 func (a *ARPRequest) TargetIP() string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.targetIP
 }
 
 func (a *ARPRequest) PacketCount() uint64 {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.packetCount
 }
 
 func (a *ARPRequest) FirstSeen() time.Time {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.firstSeen
 }
 
 func (a *ARPRequest) LastSeen() time.Time {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return a.lastSeen
 }
 
 func (a *ARPRequest) MarshalJSON() ([]byte, error) {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	return json.Marshal(&struct {
 		ID          string    `json:"id"`
 		SrcMAC      string    `json:"src_mac"`
@@ -90,9 +66,6 @@ func (a *ARPRequest) MarshalJSON() ([]byte, error) {
 }
 
 func (a *ARPRequest) UnmarshalJSON(data []byte) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	aux := &struct {
 		ID          string    `json:"id"`
 		SrcMAC      string    `json:"src_mac"`
@@ -129,9 +102,6 @@ func NewARPRequest(id, srcMAC, targetIP string) *ARPRequest {
 }
 
 func (a *ARPRequest) Update() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	a.packetCount++
 	a.lastSeen = time.Now()
 }

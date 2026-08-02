@@ -16,7 +16,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log/slog"
-	"net"
+	"net/netip"
 )
 
 type RawEvent struct {
@@ -54,7 +54,7 @@ func (p *EventProcessor) ProcessRingEvent(_ context.Context, event RawEvent) err
 
 	switch proto {
 	case network.ProtoIPv6RA:
-		srcIP := net.IP(event.SrcIPv6[:]).String()
+		srcIP := p.parseIPv6(event.SrcIPv6)
 		p.logger.Warn("CRITICAL: IPv6 Router Advertisement detected!", "src_mac", srcMAC, "src_ip", srcIP)
 
 		aPeer.RegisterAlert(
@@ -105,7 +105,11 @@ func (p *EventProcessor) parseIPv4(ipFix uint32) string {
 	if ipFix == 0 {
 		return ""
 	}
-	ip := make(net.IP, 4)
-	binary.BigEndian.PutUint32(ip, ipFix)
-	return ip.String()
+	var b [4]byte
+	binary.BigEndian.PutUint32(b[:], ipFix)
+	return netip.AddrFrom4(b).String() // Molto più veloce e con meno allocazioni di net.IP
+}
+
+func (p *EventProcessor) parseIPv6(ipFix [16]byte) string {
+	return netip.AddrFrom16(ipFix).String() // Zero-alloc per la conversione da array
 }

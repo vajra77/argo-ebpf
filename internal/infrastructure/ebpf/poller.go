@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -91,7 +92,21 @@ func (p *Poller) consumeRingBuffer(ctx context.Context) {
 	}
 	defer rd.Close()
 
-	p.logger.Info("Started eBPF RingBuffer consumer loop")
+	eventChan := make(chan collector.RawEvent, 4096)
+	var wg sync.WaitGroup
+
+	const workerCount = 4
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for ev := range eventChan {
+				if err := p.processor.ProcessRingEvent(ctx, ev); err != nil {
+					p.logger.Warn("Failed to process event", "error", err)
+				}
+			}
+		}()
+	}
 
 	go func() {
 		<-ctx.Done()
@@ -102,21 +117,19 @@ func (p *Poller) consumeRingBuffer(ctx context.Context) {
 		record, err := rd.Read()
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
-				p.logger.Info("RingBuffer reader closed")
-				return
+				break
 			}
-			p.logger.Warn("Error reading from RingBuffer", "error", err)
 			continue
 		}
 
-		if len(record.RawSample) < 44 { // Dimensione attesa della struct packed
-			p.logger.Error("Received malformed RingBuffer event: too short")
+		if len(record.RawSample) < 44 {
 			continue
 		}
+
 		rawEvent := (*BroadcastEventT)(unsafe.Pointer(&record.RawSample[0]))
 
-		// Invia l'evento grezzo al layer Service
-		domainEvent := collector.RawEvent{
+		select {
+		case eventChan <- collector.RawEvent{
 			TimestampNs: rawEvent.TimestampNs,
 			SrcIPv4:     rawEvent.SrcIpV4,
 			TargetIPv4:  rawEvent.TargetIpV4,
@@ -124,16 +137,15 @@ func (p *Poller) consumeRingBuffer(ctx context.Context) {
 			ProtoType:   rawEvent.ProtoType,
 			PktLen:      rawEvent.PktLen,
 			SrcMAC:      rawEvent.SrcMac,
-		}
-
-		if err := p.processor.ProcessRingEvent(ctx, domainEvent); err != nil {
-			// Se l'errore è dovuto all'annullamento del contesto, usciamo
-			if errors.Is(err, ctx.Err()) {
-				return
-			}
-			p.logger.Warn("Failed to process event in application layer", "error", err)
+		}:
+		default:
+			p.logger.Warn("Event channel full, dropping event")
 		}
 	}
+
+	// Chiude il canale e attende che i worker svuotino la coda
+	close(eventChan)
+	wg.Wait()
 }
 
 // pollBroadcastStats legge ad intervalli regolari la mappa HASH con i totali dei byte/pacchetti

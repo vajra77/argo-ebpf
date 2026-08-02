@@ -45,22 +45,22 @@ func (p *Peer) MarshalJSON() ([]byte, error) {
 	defer p.mu.RUnlock()
 
 	return json.Marshal(&struct {
-		Name         string                 `json:"name"`
-		ASN          int                    `json:"asn"`
-		MACs         []string               `json:"macs"`
-		TotalPackets uint64                 `json:"total_packets"`
-		AveragePPS   float64                `json:"average_pps"`
-		ARPs         map[string]*ARPRequest `json:"arps"`
-		Alerts       map[string]*Alert      `json:"alerts"`
-		LastSeen     time.Time              `json:"last_seen"`
+		Name         string       `json:"name"`
+		ASN          int          `json:"asn"`
+		MACs         []string     `json:"macs"`
+		TotalPackets uint64       `json:"total_packets"`
+		AveragePPS   float64      `json:"average_pps"`
+		ARPs         []ARPRequest `json:"arps"`
+		Alerts       []Alert      `json:"alerts"`
+		LastSeen     time.Time    `json:"last_seen"`
 	}{
 		Name:         p.name,
 		ASN:          p.asn,
 		MACs:         p.macs,
 		TotalPackets: p.totalPackets,
-		AveragePPS:   p.AveragePPS(),
-		ARPs:         p.arps,
-		Alerts:       p.alerts,
+		AveragePPS:   float64(p.totalPackets) / DefaultTTL().Seconds(),
+		ARPs:         p.arpsUnlocked(),
+		Alerts:       p.alertsUnlocked(),
 		LastSeen:     p.lastSeen,
 	})
 }
@@ -70,13 +70,13 @@ func (p *Peer) UnmarshalJSON(data []byte) error {
 	defer p.mu.Unlock()
 
 	aux := &struct {
-		Name         string                 `json:"name"`
-		ASN          int                    `json:"asn"`
-		MACs         []string               `json:"macs"`
-		TotalPackets uint64                 `json:"total_packets"`
-		ARPs         map[string]*ARPRequest `json:"arps"`
-		Alerts       map[string]*Alert      `json:"alerts"`
-		LastSeen     time.Time              `json:"last_seen"`
+		Name         string       `json:"name"`
+		ASN          int          `json:"asn"`
+		MACs         []string     `json:"macs"`
+		TotalPackets uint64       `json:"total_packets"`
+		ARPs         []ARPRequest `json:"arps"`
+		Alerts       []Alert      `json:"alerts"`
+		LastSeen     time.Time    `json:"last_seen"`
 	}{}
 
 	if err := json.Unmarshal(data, aux); err != nil {
@@ -87,9 +87,19 @@ func (p *Peer) UnmarshalJSON(data []byte) error {
 	p.asn = aux.ASN
 	p.macs = aux.MACs
 	p.totalPackets = aux.TotalPackets
-	p.arps = aux.ARPs
-	p.alerts = aux.Alerts
 	p.lastSeen = aux.LastSeen
+
+	p.arps = make(map[string]*ARPRequest, len(aux.ARPs))
+	for _, arp := range aux.ARPs {
+		a := arp
+		p.arps[arp.id] = new(a)
+	}
+
+	p.alerts = make(map[string]*Alert, len(aux.Alerts))
+	for _, alr := range aux.Alerts {
+		a := alr
+		p.alerts[alr.id] = new(a)
+	}
 
 	return nil
 }
@@ -120,24 +130,40 @@ func (p *Peer) AveragePPS() float64 {
 	return float64(p.totalPackets) / DefaultTTL().Seconds()
 }
 
-func (p *Peer) Alerts() []*Alert {
+func (p *Peer) Alerts() []Alert {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	alerts := make([]*Alert, 0)
+	alerts := make([]Alert, 0)
 	for _, v := range p.alerts {
-		alerts = append(alerts, v)
+		alerts = append(alerts, *v)
 	}
 	return alerts
 }
 
-func (p *Peer) ARPs() []*ARPRequest {
+func (p *Peer) alertsUnlocked() []Alert {
+	alerts := make([]Alert, 0, len(p.alerts))
+	for _, v := range p.alerts {
+		alerts = append(alerts, *v)
+	}
+	return alerts
+}
+
+func (p *Peer) ARPs() []ARPRequest {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	arpRequests := make([]*ARPRequest, 0)
+	arpRequests := make([]ARPRequest, 0)
 	for _, v := range p.arps {
-		arpRequests = append(arpRequests, v)
+		arpRequests = append(arpRequests, *v)
+	}
+	return arpRequests
+}
+
+func (p *Peer) arpsUnlocked() []ARPRequest {
+	arpRequests := make([]ARPRequest, 0, len(p.arps))
+	for _, v := range p.arps {
+		arpRequests = append(arpRequests, *v)
 	}
 	return arpRequests
 }
