@@ -36,7 +36,7 @@ func main() {
 
 	// Recupero configurazioni da Environment Variables
 	iface := getEnv("IFACE", "eth0")
-	apiAddr := getEnv("API_ADDR", "127.0.0.1:8080")
+	srvAddr := getEnv("SERVER_ADDR", "localhost:8080")
 	logLevel := getEnv("LOG_LEVEL", "info")
 	redisAddr := getEnv("REDIS_ADDR", "localhost:6379")
 	ixfURL := getEnv("IXF_PROVIDER_URL", "")
@@ -60,7 +60,7 @@ func main() {
 
 	logger.Info("👁️ Starting argo-ebpf Sentinel...",
 		"interface", iface,
-		"api_address", apiAddr,
+		"api_address", srvAddr,
 	)
 
 	// Context for graceful shutdown
@@ -118,7 +118,7 @@ func main() {
 	peerApi.RegisterRoutes(mux, "/api/v1")
 
 	server := new(http.Server{
-		Addr:         apiAddr,
+		Addr:         srvAddr,
 		Handler:      mux,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -126,7 +126,7 @@ func main() {
 	})
 
 	go func() {
-		logger.Info("REST API Server running", "address", apiAddr)
+		logger.Info("REST API Server running", "address", srvAddr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("HTTP API Server failure", "error", err)
 			stop()
