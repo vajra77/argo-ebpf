@@ -12,8 +12,11 @@ package collector
 import (
 	"argo-ebpf/internal/domain/peer"
 	"argo-ebpf/internal/services/ixf"
+	"log/slog"
 	"sync"
 )
+
+const MaxStoreWorkers = 10
 
 type PeerCache struct {
 	mapper      *ixf.Mapper
@@ -21,20 +24,38 @@ type PeerCache struct {
 	macEntries  map[string]*peer.Peer
 	uniquePeers map[int]*peer.Peer
 	unknownMACs map[string]uint64
-	storeChan   chan peer.Peer
+	storeC      chan *peer.Peer
 
+	wg sync.WaitGroup
 	mu sync.Mutex
 }
 
 func NewPeerCache(mapper *ixf.Mapper, repo peer.Repository) *PeerCache {
-	return new(PeerCache{
+	c := new(PeerCache{
 		mapper:      mapper,
 		repo:        repo,
 		macEntries:  make(map[string]*peer.Peer),
 		uniquePeers: make(map[int]*peer.Peer),
 		unknownMACs: make(map[string]uint64),
-		storeChan:   make(chan peer.Peer, 1000),
+		storeC:      make(chan *peer.Peer, 1000),
 	})
+
+	for i := 0; i < MaxStoreWorkers; i++ {
+		c.wg.Go(func() {
+			for snapshot := range c.storeC {
+				if err := c.repo.Upsert(snapshot); err != nil {
+					slog.Warn("unable to store peer", "error", err, "name", snapshot.Name())
+				}
+			}
+		})
+	}
+
+	return c
+}
+
+func (c *PeerCache) Close() {
+	close(c.storeC)
+	c.wg.Wait()
 }
 
 func (c *PeerCache) GetOrSet(srcMac string) *peer.Peer {
@@ -66,58 +87,34 @@ func (c *PeerCache) GetOrSet(srcMac string) *peer.Peer {
 	return newPeer
 }
 
-func (c *PeerCache) Flush() []error {
-	flushErrors := make([]error, 0)
-
+func (c *PeerCache) Flush() {
 	c.mu.Lock()
-	for _, p := range c.uniquePeers {
-		c.snapshot = append(c.snapshot, p.Clone())
-		p.Reset()
-	}
-	c.unknownMACs = make(map[string]uint64)
-	c.mu.Unlock()
 
-	if err := c.mapper.Refresh(); err != nil {
-		flushErrors = append(flushErrors, err)
-	}
-
-	for _, p := range c.snapshot {
-		if !p.IsStale() {
-			continue
-		}
-		if err := c.repo.Upsert(&p); err != nil {
-			flushErrors = append(flushErrors, err)
-		}
-	}
-
-	// save other data under peer ASN 0
 	uMacs := make([]string, 0)
 	var totPkts uint64 = 0
 	for k, v := range c.unknownMACs {
 		uMacs = append(uMacs, k)
 		totPkts += v
 	}
-	unkPeer := peer.New("Unknown", 0, uMacs)
-	unkPeer.UpdateTotalPackets(totPkts)
-	if err := c.repo.Upsert(unkPeer); err != nil {
-		flushErrors = append(flushErrors, err)
-	}
+	clear(c.unknownMACs)
 
-	return flushErrors
-}
-
-func (c *PeerCache) storeWorker() {
-	for p := range c.storeChan {
-		if err := c.repo.Upsert(new(p)); err != nil {
-			// Log dell'errore (usa slog se disponibile nel contesto)
-		}
-	}
-	for _, p := range c.snapshot {
-		if !p.IsStale() {
+	for _, p := range c.uniquePeers {
+		if p.IsStale() {
 			continue
 		}
-		if err := c.repo.Upsert(&p); err != nil {
-			flushErrors = append(flushErrors, err)
+		snapshot := peer.AcquireSnapshot()
+		p.DrainTo(snapshot)
+		c.storeC <- snapshot
+	}
+
+	c.mu.Unlock()
+
+	if len(uMacs) > 0 {
+		// save other data under peer ASN 0
+		unkPeer := peer.New("Unknown", 0, uMacs)
+		unkPeer.UpdateTotalPackets(totPkts)
+		if err := c.repo.Upsert(unkPeer); err != nil {
+			slog.Warn("unable to store peer", "error", err, "name", unkPeer.Name())
 		}
 	}
 }

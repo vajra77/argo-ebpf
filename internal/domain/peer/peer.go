@@ -241,7 +241,8 @@ func (p *Peer) Reset() {
 	clear(p.alerts)
 }
 
-func (p *Peer) Clone() Peer {
+// Frozen returns a copy of the peer struct with all mutable fields frozen.
+func (p *Peer) Frozen() Peer {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -269,6 +270,52 @@ func (p *Peer) Clone() Peer {
 		alerts:       alertsCopy,
 		lastSeen:     p.lastSeen,
 	}
+}
+
+var peerPool = sync.Pool{
+	New: func() any {
+		return &Peer{
+			arps:   make(map[string]*ARPRequest),
+			alerts: make(map[string]*Alert),
+		}
+	},
+}
+
+// AcquireSnapshot ottiene un'istanza *Peer riciclata dal sync.Pool
+func AcquireSnapshot() *Peer {
+	return peerPool.Get().(*Peer)
+}
+
+// Release resetta lo snapshot utilizzato e lo restituisce al sync.Pool
+func (p *Peer) Release() {
+	p.name = ""
+	p.asn = 0
+	p.macs = nil
+	p.totalPackets = 0
+
+	clear(p.arps)
+	clear(p.alerts)
+
+	peerPool.Put(p)
+}
+
+// DrainTo popola lo snapshot riutilizzato trasferendo il possesso delle mappe correnti,
+// e rialloca due mappe pulite per il Peer attivo. Il lock p.mu dura nanosecondi.
+func (p *Peer) DrainTo(snapshot *Peer) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	snapshot.name = p.name
+	snapshot.asn = p.asn
+	snapshot.macs = p.macs
+	snapshot.totalPackets = p.totalPackets
+	snapshot.arps = p.arps
+	snapshot.alerts = p.alerts
+	snapshot.lastSeen = p.lastSeen
+
+	snapshot.arps, p.arps = p.arps, snapshot.arps
+	snapshot.alerts, p.alerts = p.alerts, snapshot.alerts
+	p.totalPackets = 0
 }
 
 func DefaultTTL() time.Duration {
