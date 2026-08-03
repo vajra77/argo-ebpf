@@ -91,7 +91,7 @@ func (c *PeerCache) GetOrSet(srcMac string) *peer.Peer {
 
 func (c *PeerCache) Flush() {
 	c.mu.Lock()
-
+	// protected section
 	uMacs := make([]string, 0)
 	var totPkts uint64 = 0
 	for k, v := range c.unknownMACs {
@@ -108,7 +108,7 @@ func (c *PeerCache) Flush() {
 		p.DrainTo(snapshot)
 		c.storeC <- snapshot
 	}
-
+	// end of protected section
 	c.mu.Unlock()
 
 	if len(uMacs) > 0 {
