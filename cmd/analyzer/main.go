@@ -134,6 +134,10 @@ func main() {
 	peerApi := api.NewPeerAPI(peerQueries, []string{apiKey})
 	peerApi.RegisterRoutes(mux, "/api/v1")
 
+	statsQueries := queries.NewStatsQueryService(statsStore)
+	statsApi := api.NewStatsAPI(statsQueries, []string{apiKey})
+	statsApi.RegisterRoutes(mux, "/api/v1")
+
 	server := new(http.Server{
 		Addr:         srvAddr,
 		Handler:      mux,
