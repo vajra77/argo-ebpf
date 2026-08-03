@@ -10,6 +10,7 @@
 package stats
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -33,8 +34,6 @@ type Stats struct {
 	history       []uint64
 	hIdx          int
 	movingAverage float64
-
-	mu sync.RWMutex
 }
 
 func New() *Stats {
@@ -44,8 +43,12 @@ func New() *Stats {
 	}
 }
 
-func (s *Stats) Metrics() map[string]Metric {
-	return s.metrics
+func (s *Stats) Metrics() []Metric {
+	metrics := make([]Metric, 0, len(s.metrics))
+	for _, v := range s.metrics {
+		metrics = append(metrics, v)
+	}
+	return metrics
 }
 
 func (s *Stats) TotalPackets() uint64 {
@@ -58,6 +61,44 @@ func (s *Stats) TotalBytes() uint64 {
 
 func (s *Stats) MovingAverage() float64 {
 	return s.movingAverage
+}
+
+func (s *Stats) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		Metrics       []Metric `json:"metric"`
+		TotalPackets  uint64   `json:"total_packets"`
+		TotalBytes    uint64   `json:"total_bytes"`
+		MovingAverage float64  `json:"moving_average"`
+	}{
+		Metrics:       s.Metrics(),
+		TotalPackets:  s.totalPackets,
+		TotalBytes:    s.totalBytes,
+		MovingAverage: s.movingAverage,
+	})
+}
+
+func (s *Stats) UnmarshalJSON(data []byte) error {
+	aux := &struct {
+		Metrics       []Metric `json:"metric"`
+		TotalPackets  uint64   `json:"total_packets"`
+		TotalBytes    uint64   `json:"total_bytes"`
+		MovingAverage float64  `json:"moving_average"`
+	}{}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	s.totalBytes = aux.TotalBytes
+	s.totalPackets = aux.TotalPackets
+	s.movingAverage = aux.MovingAverage
+	s.metrics = make(map[string]Metric)
+
+	for _, m := range aux.Metrics {
+		s.Update(m.SrcMac, m.ProtoType, m.Packets, m.Bytes)
+	}
+
+	return nil
 }
 
 func (s *Stats) Update(srcMac string, protoType uint16, packets uint64, bytes uint64) {

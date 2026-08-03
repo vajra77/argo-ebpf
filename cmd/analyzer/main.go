@@ -11,6 +11,7 @@ package main
 import (
 	"argo-ebpf/internal/api"
 	"argo-ebpf/internal/domain/peer"
+	"argo-ebpf/internal/domain/stats"
 	"argo-ebpf/internal/services/ixf"
 	"argo-ebpf/internal/services/queries"
 	"context"
@@ -68,6 +69,7 @@ func main() {
 	defer stop()
 
 	peerStore := repository.NewRedisPeerStore(ctx, redisAddr, 24*time.Hour)
+	statsStore := repository.NewRedisStatsStore(ctx, redisAddr, 15*time.Minute)
 
 	// Mapper control
 	mapper := ixf.NewMapper(ixfURL)
@@ -91,8 +93,26 @@ func main() {
 		}
 	}()
 
+	statsCache := collector.NewStatsCache(statsStore, logger)
+	go func() {
+		ticker := time.NewTicker(stats.DefaultTimeSlot)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Info("Stopping stats cache flusher")
+				statsCache.Flush()
+				return
+			case <-ticker.C:
+				// flush cache to redis store
+				statsCache.Flush()
+			}
+		}
+	}()
+
 	// Event Processor init
-	processor := collector.NewEventProcessor(peerCache, logger)
+	processor := collector.NewEventProcessor(peerCache, statsCache, logger)
 
 	// eBPF/XDP loader initialization
 	bpfPoller, err := ebpf.NewPoller(iface, processor, logger)

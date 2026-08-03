@@ -65,11 +65,7 @@ func (s *RedisPeerStore) RetrieveByMAC(mac string) (*peer.Peer, error) {
 	macKey := fmt.Sprintf("peer:mac:%s", mac)
 
 	asn, err := s.client.Get(s.ctx, macKey).Int()
-	if errors.Is(err, redis.Nil) {
-		// Logica UnknownMACs
-		s.client.SAdd(s.ctx, "peers:unknown_macs", mac)
-		return nil, nil
-	} else if err != nil {
+	if err != nil {
 		return nil, err
 	}
 
@@ -86,12 +82,12 @@ func (s *RedisPeerStore) RetrieveByASN(asn int) (*peer.Peer, error) {
 		return nil, err
 	}
 
-	var peer peer.Peer
-	if err := json.Unmarshal(data, &peer); err != nil {
+	var jPeer peer.Peer
+	if err := json.Unmarshal(data, &jPeer); err != nil {
 		return nil, err
 	}
 
-	return &peer, nil
+	return new(jPeer), nil
 }
 
 func (s *RedisPeerStore) Update(peer *peer.Peer) error {
