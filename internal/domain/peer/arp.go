@@ -14,6 +14,7 @@ import (
 	"time"
 )
 
+// ARPRequest models an ARP Request packet basic info
 type ARPRequest struct {
 	id          string
 	srcMAC      string
@@ -22,6 +23,8 @@ type ARPRequest struct {
 	firstSeen   time.Time
 	lastSeen    time.Time
 }
+
+// Getters
 
 func (a *ARPRequest) ID() string {
 	return a.id
@@ -47,6 +50,7 @@ func (a *ARPRequest) LastSeen() time.Time {
 	return a.lastSeen
 }
 
+// MarshalJSON marshals an ARPRequest to JSON
 func (a *ARPRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		ID          string    `json:"id"`
@@ -65,6 +69,7 @@ func (a *ARPRequest) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// UnmarshalJSON unmarshals an ARPRequest from JSON
 func (a *ARPRequest) UnmarshalJSON(data []byte) error {
 	aux := &struct {
 		ID          string    `json:"id"`
@@ -89,6 +94,7 @@ func (a *ARPRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// NewARPRequest creates a new ARPRequest
 func NewARPRequest(id, srcMAC, targetIP string) *ARPRequest {
 	now := time.Now()
 	return new(ARPRequest{
@@ -101,6 +107,7 @@ func NewARPRequest(id, srcMAC, targetIP string) *ARPRequest {
 	})
 }
 
+// Update updates an existing ARPRequest object
 func (a *ARPRequest) Update() {
 	a.packetCount++
 	a.lastSeen = time.Now()

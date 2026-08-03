@@ -18,6 +18,7 @@ import (
 
 const DefaultTTL = 15 * time.Minute
 
+// Peer object collects all arps and alerts about a single peer
 type Peer struct {
 	name         string
 	asn          int
@@ -30,6 +31,7 @@ type Peer struct {
 	mu sync.RWMutex
 }
 
+// New creates a new Peer object
 func New(name string, asn int, macs []string) *Peer {
 	return new(Peer{
 		name:         name,
@@ -42,6 +44,7 @@ func New(name string, asn int, macs []string) *Peer {
 	})
 }
 
+// MarshalJSON marshals a Peer object to JSON
 func (p *Peer) MarshalJSON() ([]byte, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -67,6 +70,7 @@ func (p *Peer) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// UnmarshalJSON unmarshals a Peer object from JSON
 func (p *Peer) UnmarshalJSON(data []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -106,7 +110,10 @@ func (p *Peer) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Getters
+
 func (p *Peer) Name() string {
+
 	return p.name
 }
 
@@ -115,6 +122,9 @@ func (p *Peer) ASN() int {
 }
 
 func (p *Peer) MACs() []string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
 	return p.macs
 }
 
@@ -132,6 +142,15 @@ func (p *Peer) AveragePPS() float64 {
 	return float64(p.totalPackets) / DefaultTTL.Seconds()
 }
 
+// LastSeen returns the last time a Peer object was seen
+func (p *Peer) LastSeen() time.Time {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	return p.lastSeen
+}
+
+// Alerts returns the alerts of a Peer object (as a slice)
 func (p *Peer) Alerts() []Alert {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -143,6 +162,7 @@ func (p *Peer) Alerts() []Alert {
 	return alerts
 }
 
+// alertsUnlocked returns the alerts of a Peer object without locking the mutex
 func (p *Peer) alertsUnlocked() []Alert {
 	alerts := make([]Alert, 0, len(p.alerts))
 	for _, v := range p.alerts {
@@ -151,6 +171,7 @@ func (p *Peer) alertsUnlocked() []Alert {
 	return alerts
 }
 
+// ARPs returns the ARP requests of a Peer object (as a slice)
 func (p *Peer) ARPs() []ARPRequest {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -162,6 +183,7 @@ func (p *Peer) ARPs() []ARPRequest {
 	return arpRequests
 }
 
+// arpsUnlocked returns the ARP requests of a Peer object without locking the mutex
 func (p *Peer) arpsUnlocked() []ARPRequest {
 	arpRequests := make([]ARPRequest, 0, len(p.arps))
 	for _, v := range p.arps {
@@ -170,13 +192,7 @@ func (p *Peer) arpsUnlocked() []ARPRequest {
 	return arpRequests
 }
 
-func (p *Peer) LastSeen() time.Time {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	return p.lastSeen
-}
-
+// RegisterMAC registers a MAC address for a Peer object
 func (p *Peer) RegisterMAC(mac string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -186,6 +202,7 @@ func (p *Peer) RegisterMAC(mac string) {
 	}
 }
 
+// RegisterAlert registers an alert for a Peer object
 func (p *Peer) RegisterAlert(id, srcMAC, srcIP string, alertType AlertType, severity Severity, act string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -199,6 +216,7 @@ func (p *Peer) RegisterAlert(id, srcMAC, srcIP string, alertType AlertType, seve
 	p.totalPackets++
 }
 
+// RegisterARPRequest registers an ARP request for a Peer object
 func (p *Peer) RegisterARPRequest(id, srcMAC, targetIP string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -213,6 +231,7 @@ func (p *Peer) RegisterARPRequest(id, srcMAC, targetIP string) {
 	p.totalPackets++
 }
 
+// UpdateTotalPackets updates the absolute value of totalPackets
 func (p *Peer) UpdateTotalPackets(packets uint64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -220,6 +239,7 @@ func (p *Peer) UpdateTotalPackets(packets uint64) {
 	p.totalPackets += packets
 }
 
+// UpdateLastSeen updates the last time a Peer object was seen
 func (p *Peer) UpdateLastSeen() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -227,6 +247,7 @@ func (p *Peer) UpdateLastSeen() {
 	p.lastSeen = time.Now()
 }
 
+// IsStale returns true if a Peer object is stale
 func (p *Peer) IsStale() bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -234,6 +255,7 @@ func (p *Peer) IsStale() bool {
 	return time.Since(p.lastSeen) > DefaultTTL
 }
 
+// sync.Pool to handle object recycling in serialization routines
 var peerPool = sync.Pool{
 	New: func() any {
 		return &Peer{
@@ -243,12 +265,12 @@ var peerPool = sync.Pool{
 	},
 }
 
-// AcquireSnapshot ottiene un'istanza *Peer riciclata dal sync.Pool
+// AcquireSnapshot gets a recycled *Peer instance from sync.Pool
 func AcquireSnapshot() *Peer {
 	return peerPool.Get().(*Peer)
 }
 
-// Release resetta lo snapshot utilizzato e lo restituisce al sync.Pool
+// Release resets the snapshot used and returns it to sync.Pool
 func (p *Peer) Release() {
 	p.name = ""
 	p.asn = 0
@@ -261,8 +283,7 @@ func (p *Peer) Release() {
 	peerPool.Put(p)
 }
 
-// DrainTo popola lo snapshot riutilizzato trasferendo il possesso delle mappe correnti,
-// e rialloca due mappe pulite per il Peer attivo. Il lock p.mu dura nanosecondi.
+// DrainTo copies the current state of the Peer object to the provided snapshot
 func (p *Peer) DrainTo(snapshot *Peer) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

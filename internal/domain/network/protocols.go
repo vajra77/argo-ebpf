@@ -22,6 +22,7 @@ const (
 	ProtoCDPLLDP ProtocolType = 5
 )
 
+// String converts a ProtocolType to a string
 func (p ProtocolType) String() string {
 	switch p {
 	case ProtoARPReq:

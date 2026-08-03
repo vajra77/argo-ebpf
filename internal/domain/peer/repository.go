@@ -9,6 +9,7 @@
 
 package peer
 
+// Repository interface defines the methods for interacting with the peer repository
 type Repository interface {
 	Upsert(p *Peer) error
 	RetrieveByMAC(mac string) (*Peer, error)

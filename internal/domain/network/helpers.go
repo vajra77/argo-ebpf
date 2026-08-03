@@ -11,8 +11,7 @@ package network
 
 const hexDigits = "0123456789abcdef"
 
-// FormatMAC converte un array di 6 byte in una stringa MAC formattata a 12 caratteri esadecimali
-// senza usare reflection o fmt.Sprintf per massimizzare le prestazioni nel throughput eBPF.
+// FormatMAC converts a 6-byte array into a MAC string (no colons)
 func FormatMAC(mac [6]byte) string {
 	var buf [12]byte
 	buf[0] = hexDigits[mac[0]>>4]
@@ -30,6 +29,7 @@ func FormatMAC(mac [6]byte) string {
 	return string(buf[:])
 }
 
+// FormatMACWithColons converts a 6-byte array into a MAC string with colons
 func FormatMACWithColons(mac [6]byte) string {
 	var buf [17]byte
 	buf[0] = hexDigits[mac[0]>>4]

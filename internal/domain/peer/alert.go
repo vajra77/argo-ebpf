@@ -30,6 +30,7 @@ const (
 	SeverityCritical Severity = "CRITICAL"
 )
 
+// Alert represents a network alert (a security event detected by the system)
 type Alert struct {
 	id              string
 	peerMAC         string
@@ -41,6 +42,8 @@ type Alert struct {
 	firstSeen       time.Time
 	lastSeen        time.Time
 }
+
+// Getters
 
 func (a *Alert) ID() string {
 	return a.id
@@ -78,6 +81,7 @@ func (a *Alert) LastSeen() time.Time {
 	return a.lastSeen
 }
 
+// MarshalJSON marshals an Alert to JSON
 func (a *Alert) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		ID              string    `json:"id"`
@@ -102,6 +106,7 @@ func (a *Alert) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// UnmarshalJSON unmarshals an Alert from JSON
 func (a *Alert) UnmarshalJSON(data []byte) error {
 	aux := &struct {
 		ID              string    `json:"id"`
@@ -132,6 +137,7 @@ func (a *Alert) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// NewAlert creates a new Alert instance
 func NewAlert(id string, srcMAC, srcIP string, alertType AlertType, severity Severity, sugg string) *Alert {
 	now := time.Now()
 	return new(Alert{
@@ -147,6 +153,7 @@ func NewAlert(id string, srcMAC, srcIP string, alertType AlertType, severity Sev
 	})
 }
 
+// Update updates an existing alert
 func (a *Alert) Update() {
 	a.packetCount++
 	a.lastSeen = time.Now()
