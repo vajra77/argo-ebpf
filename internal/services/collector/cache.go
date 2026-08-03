@@ -21,6 +21,7 @@ type PeerCache struct {
 	macEntries  map[string]*peer.Peer
 	uniquePeers map[int]*peer.Peer
 	unknownMACs map[string]uint64
+	storeChan   chan peer.Peer
 
 	mu sync.Mutex
 }
@@ -32,6 +33,7 @@ func NewPeerCache(mapper *ixf.Mapper, repo peer.Repository) *PeerCache {
 		macEntries:  make(map[string]*peer.Peer),
 		uniquePeers: make(map[int]*peer.Peer),
 		unknownMACs: make(map[string]uint64),
+		storeChan:   make(chan peer.Peer, 1000),
 	})
 }
 
@@ -68,17 +70,10 @@ func (c *PeerCache) Flush() []error {
 	flushErrors := make([]error, 0)
 
 	c.mu.Lock()
-	peersToProcess := make([]*peer.Peer, 0)
-	processed := make(map[int]bool)
-	for _, p := range c.macEntries {
-		if processed[p.ASN()] {
-			continue
-		}
-		peersToProcess = append(peersToProcess, p)
-		processed[p.ASN()] = true
+	for _, p := range c.uniquePeers {
+		c.snapshot = append(c.snapshot, p.Clone())
+		p.Reset()
 	}
-	c.macEntries = make(map[string]*peer.Peer)
-	c.uniquePeers = make(map[int]*peer.Peer)
 	c.unknownMACs = make(map[string]uint64)
 	c.mu.Unlock()
 
@@ -86,8 +81,11 @@ func (c *PeerCache) Flush() []error {
 		flushErrors = append(flushErrors, err)
 	}
 
-	for _, p := range peersToProcess {
-		if err := c.repo.Upsert(p); err != nil {
+	for _, p := range c.snapshot {
+		if !p.IsStale() {
+			continue
+		}
+		if err := c.repo.Upsert(&p); err != nil {
 			flushErrors = append(flushErrors, err)
 		}
 	}
@@ -106,4 +104,20 @@ func (c *PeerCache) Flush() []error {
 	}
 
 	return flushErrors
+}
+
+func (c *PeerCache) storeWorker() {
+	for p := range c.storeChan {
+		if err := c.repo.Upsert(new(p)); err != nil {
+			// Log dell'errore (usa slog se disponibile nel contesto)
+		}
+	}
+	for _, p := range c.snapshot {
+		if !p.IsStale() {
+			continue
+		}
+		if err := c.repo.Upsert(&p); err != nil {
+			flushErrors = append(flushErrors, err)
+		}
+	}
 }

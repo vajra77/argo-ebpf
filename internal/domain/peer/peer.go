@@ -237,8 +237,38 @@ func (p *Peer) Reset() {
 	defer p.mu.Unlock()
 
 	p.totalPackets = 0
-	p.arps = make(map[string]*ARPRequest)
-	p.alerts = make(map[string]*Alert)
+	clear(p.arps)
+	clear(p.alerts)
+}
+
+func (p *Peer) Clone() Peer {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	macsCopy := make([]string, len(p.macs))
+	copy(macsCopy, p.macs)
+
+	arpsCopy := make(map[string]*ARPRequest, len(p.arps))
+	for k, v := range p.arps {
+		val := *v
+		arpsCopy[k] = new(val)
+	}
+
+	alertsCopy := make(map[string]*Alert, len(p.alerts))
+	for k, v := range p.alerts {
+		val := *v
+		alertsCopy[k] = new(val)
+	}
+
+	return Peer{
+		name:         p.name,
+		asn:          p.asn,
+		macs:         macsCopy,
+		totalPackets: p.totalPackets,
+		arps:         arpsCopy,
+		alerts:       alertsCopy,
+		lastSeen:     p.lastSeen,
+	}
 }
 
 func DefaultTTL() time.Duration {
