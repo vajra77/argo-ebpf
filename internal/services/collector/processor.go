@@ -30,13 +30,15 @@ type RawEvent struct {
 }
 
 type EventProcessor struct {
-	cache  *PeerCache
+	pCache *PeerCache
+	sCache *StatsCache
 	logger *slog.Logger
 }
 
-func NewEventProcessor(cache *PeerCache, logger *slog.Logger) *EventProcessor {
+func NewEventProcessor(pCache *PeerCache, sCache *StatsCache, logger *slog.Logger) *EventProcessor {
 	return new(EventProcessor{
-		cache:  cache,
+		pCache: pCache,
+		sCache: sCache,
 		logger: logger,
 	})
 }
@@ -45,7 +47,7 @@ func NewEventProcessor(cache *PeerCache, logger *slog.Logger) *EventProcessor {
 func (p *EventProcessor) ProcessRingEvent(_ context.Context, event RawEvent) error {
 	srcMAC := network.FormatMAC(event.SrcMAC)
 
-	aPeer := p.cache.GetOrSet(srcMAC)
+	aPeer := p.pCache.GetOrSet(srcMAC)
 	if aPeer == nil {
 		return fmt.Errorf("failed to retrieve peer for MAC %s", srcMAC)
 	}
@@ -99,6 +101,8 @@ func (p *EventProcessor) ProcessStatsMetric(macBytes [6]byte, protoType uint16, 
 	//		macBytes[3], macBytes[4], macBytes[5])
 	//
 	//p.repo.UpsertStat(srcMAC, domain.ProtocolType(protoType), packets, bytes)
+	srcMac := network.FormatMAC(macBytes)
+	p.sCache.Set(srcMac, protoType, packets, bytes)
 }
 
 func (p *EventProcessor) parseIPv4(ipFix uint32) string {

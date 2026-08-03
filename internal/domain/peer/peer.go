@@ -234,46 +234,6 @@ func (p *Peer) IsStale() bool {
 	return time.Since(p.lastSeen) > DefaultTTL
 }
 
-func (p *Peer) Reset() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.totalPackets = 0
-	clear(p.arps)
-	clear(p.alerts)
-}
-
-// Frozen returns a copy of the peer struct with all mutable fields frozen.
-func (p *Peer) Frozen() Peer {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	macsCopy := make([]string, len(p.macs))
-	copy(macsCopy, p.macs)
-
-	arpsCopy := make(map[string]*ARPRequest, len(p.arps))
-	for k, v := range p.arps {
-		val := *v
-		arpsCopy[k] = new(val)
-	}
-
-	alertsCopy := make(map[string]*Alert, len(p.alerts))
-	for k, v := range p.alerts {
-		val := *v
-		alertsCopy[k] = new(val)
-	}
-
-	return Peer{
-		name:         p.name,
-		asn:          p.asn,
-		macs:         macsCopy,
-		totalPackets: p.totalPackets,
-		arps:         arpsCopy,
-		alerts:       alertsCopy,
-		lastSeen:     p.lastSeen,
-	}
-}
-
 var peerPool = sync.Pool{
 	New: func() any {
 		return &Peer{

@@ -48,6 +48,7 @@ func NewPeerCache(mapper *ixf.Mapper, repo peer.Repository, logger *slog.Logger)
 				if err := c.repo.Upsert(snapshot); err != nil {
 					c.logger.Warn("unable to store peer", "error", err, "name", snapshot.Name())
 				}
+				snapshot.Release()
 			}
 		})
 	}
