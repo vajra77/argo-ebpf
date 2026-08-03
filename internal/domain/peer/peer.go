@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+const DefaultTTL = 15 * time.Minute
+
 type Peer struct {
 	name         string
 	asn          int
@@ -58,7 +60,7 @@ func (p *Peer) MarshalJSON() ([]byte, error) {
 		ASN:          p.asn,
 		MACs:         p.macs,
 		TotalPackets: p.totalPackets,
-		AveragePPS:   float64(p.totalPackets) / DefaultTTL().Seconds(),
+		AveragePPS:   float64(p.totalPackets) / DefaultTTL.Seconds(),
 		ARPs:         p.arpsUnlocked(),
 		Alerts:       p.alertsUnlocked(),
 		LastSeen:     p.lastSeen,
@@ -127,7 +129,7 @@ func (p *Peer) AveragePPS() float64 {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	return float64(p.totalPackets) / DefaultTTL().Seconds()
+	return float64(p.totalPackets) / DefaultTTL.Seconds()
 }
 
 func (p *Peer) Alerts() []Alert {
@@ -229,7 +231,7 @@ func (p *Peer) IsStale() bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	return time.Since(p.lastSeen) > DefaultTTL()
+	return time.Since(p.lastSeen) > DefaultTTL
 }
 
 func (p *Peer) Reset() {
@@ -316,8 +318,4 @@ func (p *Peer) DrainTo(snapshot *Peer) {
 	snapshot.arps, p.arps = p.arps, snapshot.arps
 	snapshot.alerts, p.alerts = p.alerts, snapshot.alerts
 	p.totalPackets = 0
-}
-
-func DefaultTTL() time.Duration {
-	return 15 * time.Minute
 }

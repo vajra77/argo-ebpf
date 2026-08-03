@@ -75,7 +75,7 @@ func main() {
 	// Cache control
 	peerCache := collector.NewPeerCache(mapper, peerStore, logger)
 	go func() {
-		ticker := time.NewTicker(peer.DefaultTTL())
+		ticker := time.NewTicker(peer.DefaultTTL)
 		defer ticker.Stop()
 
 		for {

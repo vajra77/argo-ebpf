@@ -148,7 +148,7 @@ func (p *Poller) consumeRingBuffer(ctx context.Context) {
 	wg.Wait()
 }
 
-// pollBroadcastStats legge ad intervalli regolari la mappa HASH con i totali dei byte/pacchetti
+// pollBroadcastStats reads the eBPF map with total byte/packet counts at regular intervals
 func (p *Poller) pollBroadcastStats(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -163,11 +163,8 @@ func (p *Poller) pollBroadcastStats(ctx context.Context) {
 				val BpfStatsValT
 			)
 
-			// Iteratore sulla mappa HASH eBPF broadcast_stats
 			iterator := p.objs.BroadcastStats.Iterate()
 			for iterator.Next(&key, &val) {
-				// Passa i dati al processore.
-				// Se p.repo.UpsertStat è sincrona, questo loop dura quanto il processamento di tutti i peer.
 				p.processor.ProcessStatsMetric(key.SrcMac, key.ProtoType, val.Packets, val.Bytes)
 			}
 
