@@ -1,5 +1,5 @@
 # ==============================================================================
-# argo-ebpf - Linux Production Makefile
+# argo-ebpf - Linux Native Makefile
 # ==============================================================================
 
 BINARY_NAME=argo-ebpf
@@ -28,11 +28,6 @@ build: generate
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build -v -ldflags="-w -s" -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_DIR)
 	@echo "==> Build completata: $(BUILD_DIR)/$(BINARY_NAME)"
-
-## run: Compila ed esegue l'agente (richiede privilegi root per eBPF/XDP)
-run: build
-	@echo "==> Avvio di $(BINARY_NAME) sull'interfaccia $(IFACE)..."
-	sudo ./$(BUILD_DIR)/$(BINARY_NAME) -iface $(IFACE) -api-addr $(API_ADDR)
 
 ## test: Esegue i test di unità Go
 test:

@@ -73,7 +73,7 @@ func main() {
 	mapper := ixf.NewMapper(ixfURL)
 
 	// Cache control
-	peerCache := collector.NewPeerCache(mapper, peerStore)
+	peerCache := collector.NewPeerCache(mapper, peerStore, logger)
 	go func() {
 		ticker := time.NewTicker(peer.DefaultTTL())
 		defer ticker.Stop()
@@ -86,10 +86,7 @@ func main() {
 				return
 			case <-ticker.C:
 				// flush cache to redis store
-				flushErrors := peerCache.Flush()
-				if len(flushErrors) > 0 {
-					logger.Error("Errors while flushing peer cache", "errors", flushErrors)
-				}
+				peerCache.Flush()
 			}
 		}
 	}()

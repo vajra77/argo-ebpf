@@ -1,5 +1,5 @@
 # ==============================================================================
-# argo-ebpf - macOS Development Makefile
+# argo-ebpf - macOS Cross Development Makefile
 # ==============================================================================
 
 BINARY_NAME=argo-ebpf
@@ -9,17 +9,37 @@ IFACE?=eth0
 API_ADDR?=:8080
 
 # 1. Rileva la directory di Homebrew in base all'architettura (ARM vs Intel)
-HOMEBREW_PREFIX ?= $(shell brew --prefix 2>/dev/null || ( [ -d /opt/homebrew ] && echo /opt/homebrew || echo /usr/local ))
+HOMEBREW_PREFIX := $(shell brew --prefix 2>/dev/null || ( [ -d /opt/homebrew ] && echo /opt/homebrew || echo /usr/local ))
 
-# 2. Trova il binario di Clang direttamente dentro Cellar o opt
+# 2. Trova il binario di Clang (forziamo l'uso di Homebrew llvm se presente)
 CLANG_BIN := $(firstword $(wildcard $(HOMEBREW_PREFIX)/Cellar/llvm/*/bin/clang) \
                         $(wildcard $(HOMEBREW_PREFIX)/opt/llvm/bin/clang))
 
 STRIP_BIN := $(firstword $(wildcard $(HOMEBREW_PREFIX)/Cellar/llvm/*/bin/llvm-strip) \
                         $(wildcard $(HOMEBREW_PREFIX)/opt/llvm/bin/llvm-strip))
 
-export CLANG ?= $(CLANG_BIN)
-export LLVM_STRIP ?= $(STRIP_BIN)
+# Assegnazione forte (:=) se i binari Homebrew esistono, altrimenti fallback
+ifneq ($(CLANG_BIN),)
+    CLANG := $(CLANG_BIN)
+else
+    CLANG := clang
+endif
+
+ifneq ($(STRIP_BIN),)
+    LLVM_STRIP := $(STRIP_BIN)
+else
+    LLVM_STRIP := llvm-strip
+endif
+
+# Esporta le variabili per go generate e bpf2go
+export CLANG
+export LLVM_STRIP
+
+# Modifica del PATH inserendo LLVM di Homebrew in testa
+ifneq ($(CLANG_BIN),)
+    LLVM_PATH := $(shell dirname $(CLANG_BIN))
+    export PATH := $(LLVM_PATH):$(PATH)
+endif
 
 GO ?= go
 
@@ -35,17 +55,13 @@ generate:
 	@echo "==> Generazione binding eBPF (bpf2go)..."
 	CLANG="$(CLANG)" LLVM_STRIP="$(LLVM_STRIP)" $(GO) generate ./internal/infrastructure/ebpf/...
 
-## build: Compila il binario Go finale
+## build: Compila il binario Go finale cross-compilato per Linux amd64
 build: generate
-	@echo "==> Compilazione del binario $(BINARY_NAME)..."
+	@echo "==> Compilazione del binario $(BINARY_NAME) per Linux/amd64..."
 	@mkdir -p $(BUILD_DIR)
-	$(GO) build -v -ldflags="-w -s" -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_DIR)
-	@echo "==> Build completata: $(BUILD_DIR)/$(BINARY_NAME)"
-
-## run: Compila ed esegue l'agente (richiede privilegi root per eBPF/XDP)
-run: build
-	@echo "==> Avvio di $(BINARY_NAME) sull'interfaccia $(IFACE)..."
-	sudo ./$(BUILD_DIR)/$(BINARY_NAME) -iface $(IFACE) -api-addr $(API_ADDR)
+	# Forziamo GOOS e GOARCH per la cross-compilazione, disabilitando CGO se non necessario
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -v -ldflags="-w -s" -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_DIR)
+	@echo "==> Build completata per Linux: $(BUILD_DIR)/$(BINARY_NAME)"
 
 ## test: Esegue i test di unità Go
 test:

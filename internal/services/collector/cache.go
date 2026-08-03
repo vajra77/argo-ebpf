@@ -26,11 +26,12 @@ type PeerCache struct {
 	unknownMACs map[string]uint64
 	storeC      chan *peer.Peer
 
-	wg sync.WaitGroup
-	mu sync.Mutex
+	logger *slog.Logger
+	wg     sync.WaitGroup
+	mu     sync.Mutex
 }
 
-func NewPeerCache(mapper *ixf.Mapper, repo peer.Repository) *PeerCache {
+func NewPeerCache(mapper *ixf.Mapper, repo peer.Repository, logger *slog.Logger) *PeerCache {
 	c := new(PeerCache{
 		mapper:      mapper,
 		repo:        repo,
@@ -38,13 +39,14 @@ func NewPeerCache(mapper *ixf.Mapper, repo peer.Repository) *PeerCache {
 		uniquePeers: make(map[int]*peer.Peer),
 		unknownMACs: make(map[string]uint64),
 		storeC:      make(chan *peer.Peer, 1000),
+		logger:      logger,
 	})
 
 	for i := 0; i < MaxStoreWorkers; i++ {
 		c.wg.Go(func() {
 			for snapshot := range c.storeC {
 				if err := c.repo.Upsert(snapshot); err != nil {
-					slog.Warn("unable to store peer", "error", err, "name", snapshot.Name())
+					c.logger.Warn("unable to store peer", "error", err, "name", snapshot.Name())
 				}
 			}
 		})
@@ -114,7 +116,7 @@ func (c *PeerCache) Flush() {
 		unkPeer := peer.New("Unknown", 0, uMacs)
 		unkPeer.UpdateTotalPackets(totPkts)
 		if err := c.repo.Upsert(unkPeer); err != nil {
-			slog.Warn("unable to store peer", "error", err, "name", unkPeer.Name())
+			c.logger.Warn("unable to store peer", "error", err, "name", unkPeer.Name())
 		}
 	}
 }
