@@ -65,7 +65,7 @@ func (p *EventProcessor) ProcessRingEvent(_ context.Context, event RawEvent) err
 			srcIP,
 			peer.AlertIPv6RA,
 			peer.SeverityCritical,
-			ActIPv6NDRA,
+			ActIPv6RA,
 		)
 
 	case network.ProtoMDNS, network.ProtoLLMNR, network.ProtoCDPLLDP:

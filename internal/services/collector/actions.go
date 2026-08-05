@@ -10,7 +10,7 @@
 package collector
 
 const (
-	ActIPv6NDRA = "Please disable 'ipv6 nd send-ra' on router interface."
-	ActMcast    = "Please disable L2/multicast network discovery protocols on router."
-	ActFlood    = "Please inspect network for ARP requests flood."
+	ActIPv6RA = "Please disable 'ipv6 nd send-ra' on router interface."
+	ActMcast  = "Please disable L2/multicast network discovery protocols on router."
+	ActFlood  = "Please inspect network for ARP requests flood."
 )
