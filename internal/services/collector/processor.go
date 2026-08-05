@@ -43,7 +43,7 @@ func NewEventProcessor(pCache *PeerCache, sCache *StatsCache, logger *slog.Logge
 	})
 }
 
-// ProcessRingEvent gestisce gli eventi in streaming dal RingBuffer
+// ProcessRingEvent handles events in streaming from RingBuffer
 func (p *EventProcessor) ProcessRingEvent(_ context.Context, event RawEvent) error {
 	srcMAC := network.FormatMAC(event.SrcMAC)
 
@@ -94,13 +94,8 @@ func (p *EventProcessor) ProcessRingEvent(_ context.Context, event RawEvent) err
 	return nil
 }
 
-// ProcessStatsMetric elabora le metriche aggregate lette dalle Mappe HASH eBPF
+// ProcessStatsMetric stores metrics from eBPF hash maps
 func (p *EventProcessor) ProcessStatsMetric(macBytes [6]byte, protoType uint16, packets, bytes uint64) {
-	//	srcMAC := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x",
-	//		macBytes[0], macBytes[1], macBytes[2],
-	//		macBytes[3], macBytes[4], macBytes[5])
-	//
-	//p.repo.UpsertStat(srcMAC, domain.ProtocolType(protoType), packets, bytes)
 	srcMac := network.FormatMAC(macBytes)
 	p.sCache.Set(srcMac, protoType, packets, bytes)
 }
@@ -111,7 +106,7 @@ func (p *EventProcessor) parseIPv4(ipFix uint32) string {
 	}
 	var b [4]byte
 	binary.BigEndian.PutUint32(b[:], ipFix)
-	return netip.AddrFrom4(b).String() // Molto più veloce e con meno allocazioni di net.IP
+	return netip.AddrFrom4(b).String()
 }
 
 func (p *EventProcessor) parseIPv6(ipFix [16]byte) string {

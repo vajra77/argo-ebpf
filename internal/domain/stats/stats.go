@@ -28,15 +28,18 @@ type Metric struct {
 	Bytes     uint64
 }
 
-// Stats represents global network statistics
+// Stats represent global network statistics
 type Stats struct {
 	metrics      map[string]Metric
+	lastPackets  uint64
+	lastBytes    uint64
 	totalPackets uint64
 	totalBytes   uint64
 
 	history       []uint64
 	hIdx          int
 	movingAverage float64
+	IsAnomaly     bool
 }
 
 // New creates a new Stats object
@@ -75,11 +78,13 @@ func (s *Stats) MarshalJSON() ([]byte, error) {
 		TotalPackets  uint64   `json:"total_packets"`
 		TotalBytes    uint64   `json:"total_bytes"`
 		MovingAverage float64  `json:"moving_average"`
+		IsAnomaly     bool     `json:"is_anomaly"`
 	}{
 		Metrics:       s.Metrics(),
 		TotalPackets:  s.totalPackets,
 		TotalBytes:    s.totalBytes,
 		MovingAverage: s.movingAverage,
+		IsAnomaly:     s.IsAnomaly,
 	})
 }
 
@@ -90,6 +95,7 @@ func (s *Stats) UnmarshalJSON(data []byte) error {
 		TotalPackets  uint64   `json:"total_packets"`
 		TotalBytes    uint64   `json:"total_bytes"`
 		MovingAverage float64  `json:"moving_average"`
+		IsAnomaly     bool     `json:"is_anomaly"`
 	}{}
 
 	if err := json.Unmarshal(data, aux); err != nil {
@@ -99,6 +105,7 @@ func (s *Stats) UnmarshalJSON(data []byte) error {
 	s.totalBytes = aux.TotalBytes
 	s.totalPackets = aux.TotalPackets
 	s.movingAverage = aux.MovingAverage
+	s.IsAnomaly = aux.IsAnomaly
 	s.metrics = make(map[string]Metric)
 
 	for _, m := range aux.Metrics {
@@ -110,31 +117,48 @@ func (s *Stats) UnmarshalJSON(data []byte) error {
 
 // Update updates the network statistics for a specific source MAC address and protocol type
 func (s *Stats) Update(srcMac string, protoType uint16, packets uint64, bytes uint64) {
+	deltaPackets := packets - s.lastPackets
+	deltaBytes := bytes - s.lastBytes
+
 	if val, exists := s.metrics[srcMac]; exists {
-		val.Packets += packets
-		val.Bytes += bytes
+		val.Packets += deltaPackets
+		val.Bytes += deltaBytes
 		s.metrics[srcMac] = val
 	} else {
 		s.metrics[srcMac] = Metric{
 			SrcMac:    srcMac,
 			ProtoType: protoType,
-			Packets:   packets,
-			Bytes:     bytes,
+			Packets:   deltaPackets,
+			Bytes:     deltaBytes,
 		}
 	}
-	s.totalPackets += packets
-	s.totalBytes += bytes
+	s.totalPackets += deltaPackets
+	s.totalBytes += deltaBytes
+	s.lastPackets = packets
+	s.lastBytes = bytes
 
-	s.history[s.hIdx] += packets
-	s.hIdx++
-	if s.hIdx == maxHistory {
-		s.hIdx = 0
+	if len(s.history) == maxHistory {
+		if float64(deltaPackets) > (s.movingAverage*10) && deltaPackets > 500 {
+			s.IsAnomaly = true
+		} else {
+			s.IsAnomaly = false
+		}
 	}
+
+	if len(s.history) < maxHistory {
+		s.history = append(s.history, deltaPackets)
+	} else {
+		s.history[s.hIdx] = deltaPackets
+	}
+	s.hIdx = (s.hIdx + 1) % maxHistory
+
 	sum := uint64(0)
 	for _, v := range s.history {
 		sum += v
 	}
-	s.movingAverage = float64(sum) / float64(len(s.history))
+	if len(s.history) > 0 {
+		s.movingAverage = float64(sum) / float64(len(s.history))
+	}
 }
 
 // statsPool is a sync.Pool for reusing Stats objects
@@ -154,11 +178,14 @@ func AcquireSnapshot() *Stats {
 // Release releases a Stats object back to the pool
 func (s *Stats) Release() {
 	clear(s.metrics)
+	s.lastPackets = 0
+	s.lastBytes = 0
 	s.totalPackets = 0
 	s.totalBytes = 0
 	clear(s.history)
 	s.hIdx = 0
 	s.movingAverage = 0
+	s.IsAnomaly = false
 	statsPool.Put(s)
 }
 
@@ -167,5 +194,6 @@ func (s *Stats) DrainTo(snapshot *Stats) {
 	snapshot.totalBytes = s.totalBytes
 	snapshot.totalPackets = s.totalPackets
 	snapshot.movingAverage = s.movingAverage
+	snapshot.IsAnomaly = s.IsAnomaly
 	snapshot.metrics, s.metrics = s.metrics, snapshot.metrics
 }

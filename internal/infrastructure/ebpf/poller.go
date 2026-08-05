@@ -143,7 +143,6 @@ func (p *Poller) consumeRingBuffer(ctx context.Context) {
 		}
 	}
 
-	// Chiude il canale e attende che i worker svuotino la coda
 	close(eventChan)
 	wg.Wait()
 }
@@ -175,7 +174,7 @@ func (p *Poller) pollBroadcastStats(ctx context.Context) {
 	}
 }
 
-// Close rilascia i file descriptor e rimuove l'hook XDP dall'interfaccia
+// Close release the file descriptor and removes XDP hook
 func (p *Poller) Close() {
 	if p.link != nil {
 		_ = p.link.Close()
