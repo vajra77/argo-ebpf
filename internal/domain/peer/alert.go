@@ -21,6 +21,7 @@ const (
 	AlertMDNS   AlertType = "MDNS_BROADCAST"
 	AlertLLMNR  AlertType = "LLMNR_BROADCAST"
 	AlertCDP    AlertType = "CDP_LLDP_FRAME"
+	AlertFlood  AlertType = "ARP_REQ_FLOOD"
 )
 
 type Severity string

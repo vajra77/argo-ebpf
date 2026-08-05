@@ -88,7 +88,20 @@ func (p *EventProcessor) ProcessRingEvent(_ context.Context, event RawEvent) err
 		aPeer.RegisterARPRequest(
 			fmt.Sprintf("arp-%s-%s", srcMAC, targetIP),
 			srcMAC, targetIP)
-		p.logger.Debug("ARP Request captured", "src_ip", srcIP, "target_ip", targetIP)
+
+		if p.sCache.HasAnomaly() {
+			p.logger.Warn("ARP Flood detected!", "src_mac", srcMAC, "src_ip", srcIP, "target_ip", targetIP)
+			aPeer.RegisterAlert(
+				fmt.Sprintf("flood-arp-%s", srcMAC),
+				srcMAC,
+				srcIP,
+				peer.AlertFlood,
+				peer.SeverityWarning,
+				ActFlood,
+			)
+		} else {
+			p.logger.Debug("ARP Request captured", "src_ip", srcIP, "target_ip", targetIP)
+		}
 	}
 
 	return nil

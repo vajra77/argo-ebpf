@@ -10,6 +10,7 @@
 package collector
 
 const (
-	ActIPv6NDRA = "Avvisare immediatamente il NOC del peer di disattivare 'ipv6 nd send-ra' sull'interfaccia verso l'IXP."
-	ActMcast    = "Disattivare i servizi di discovery L2/multicast sul router del peer."
+	ActIPv6NDRA = "Please disable 'ipv6 nd send-ra' on router interface."
+	ActMcast    = "Please disable L2/multicast network discovery protocols on router."
+	ActFlood    = "Please inspect network for ARP requests flood."
 )

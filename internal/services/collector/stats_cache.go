@@ -55,6 +55,13 @@ func (c *StatsCache) Set(srcMac string, protoType uint16, packets uint64, bytes 
 	c.stats.Update(srcMac, protoType, packets, bytes)
 }
 
+func (c *StatsCache) HasAnomaly() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.stats.IsAnomaly
+}
+
 func (c *StatsCache) Flush() {
 	c.mu.Lock()
 	snapshot := stats.AcquireSnapshot()
