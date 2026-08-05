@@ -96,16 +96,14 @@ func (p *Poller) consumeRingBuffer(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	const workerCount = 4
-	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range workerCount {
+		wg.Go(func() {
 			for ev := range eventChan {
 				if err := p.processor.ProcessRingEvent(ctx, ev); err != nil {
 					p.logger.Warn("Failed to process event", "error", err)
 				}
 			}
-		}()
+		})
 	}
 
 	go func() {
